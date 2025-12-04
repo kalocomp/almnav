@@ -1,0 +1,160 @@
+; User Defined Functions for Apollo/SDE
+; (c) 1999-2003 Vista Software. All rights reserved.
+; -----------------------------------------------------------------------------
+; SDE UDF definition file
+; -----------------------------------------------------------------------------
+;   You may define up to 64 UDFs (User Defined Functions) for each RDE file
+;   type.  Each function must reside in a DLL (not necessarily the same DLL).
+;   SDE will pass parameters to your function as POINTERS (passing
+;   parameters by value is prohibited).  You must return a pointer to a value.
+;
+;   This file MUST reside in the Windows home directory - NOT the System 
+;   directory.
+;
+;   The file name is tied to the RDE (Replaceable Database Engine) type.
+;       SDECDX.UDF    Fox format 
+;       SDENTX.UDF    Clipper format
+;       SDENSX.UDF    HiPer-SIx format
+;
+;   When the RDE is first loaded, a search is made for the appropriate UDF
+;   file in the Windows home directory.  Any valid function definitions are
+;   added to the SDE xBase function table.
+;
+;
+;   SECTION NAMES [udfxx]
+;   ---------------------
+;      Section names in this file must be in the form [udfxx] where xx is a
+;      number between "01" and "64" (note the leading "0" for sections 
+;      [udf01] through [udf09]).  Multiple UDF definitions must be labeled
+;      with consecutive section numbers.  The first [udfxx] that does not exist
+;      or the first empty [udfxx] section DLLName parameter will stop the
+;      parse engine.
+;
+;   DLLName
+;   -------
+;      The name of the DLL that contains the UDF.  If it is not in the search
+;      path, you must qualify it by specifying the complete path to the file.
+;
+;   DLLFuncName
+;   -----------
+;      The name of the function in your DLL.  This does not have to be the same
+;      as the name you use in an xBase expression.  Our example SDEUDF.DLL
+;      has an exported function called "MonthName" and we will access it in
+;      xBase expressions passed to SDE as CMONTH.  
+;
+;         NOTE: DLLFuncName is CASE SENSITIVE.  It must be passed exactly as
+;               it is declared in your DLL. 
+;
+;   xBaseFuncName
+;   -------------
+;      The name for the function that will be used in xBase expressions.  The
+;      maximum length of an xBase function name is 8 characters.  This name 
+;      is NOT case senstive.  The function name must begin with a letter and may
+;      contain A..Z, a..z, 0..9, and an underscore (_).  No special characters
+;      except for the underscore are allowed.  You must also ensure that the
+;      first four characters of your xBaseFuncName are UNIQUE. They may not match 
+;      SDE defined xBase functions nor may they match any other UDF name.  SDE
+;      does NOT test for duplicate function names.  The first definition in the
+;      xBase table will be used.
+;
+;   ReturnType and ParamxType
+;   -------------------------
+;      Valid types for ReturnType and Input ParamxTypes are:
+;         NUMERIC       passed as a number
+;         JULIAN        passed as a number
+;         DATESTRING    passed as a quoted string conforming to date mask setting
+;         STRING        passed as a quoted string
+;         LOGICAL       passed as a number (0 = False, 1 = True)
+;
+;      NOTE: NUMERIC and JULIAN types will be passed to your function as
+;            double *.  If your return value is NUMERIC or JULIAN you must
+;            pass it back to SDE as a double *
+;
+;      Every UDF must have a ReturnType. If the return type is LOGICAL, pass a
+;      pointer to an integer containing your TRUE or FALSE value back to SDE.
+;
+;      Input parameters are optional.  The maximum number of input parameters
+;      is three.  If any input ParamType item is unused, leave it blank as
+;      in the example below.
+;
+;      [udf01]
+;      DLLName=sdeudf.dll
+;      DLLFuncName=MonthName
+;      xBaseFuncName=CMONTH
+;      ReturnType=STRING
+;      Param1Type=NUMERIC
+;      Param2Type=
+;      Param3Type=
+;
+;      Using our example UDF, the following SDE instruction would return
+;      "November" if the month portion of datefield was 11.
+;
+;             sMonth = ApDS1.EvalString('CMONTH(month(datefield))')
+;
+;   See the sample UDF code in TESTUDF.DPR for the new function source and
+;   more tips on constructing your own functions.
+;
+; -----------------------------------------------------------------------------
+
+[udf01]
+DLLName32=TestUDF.dll
+DLLFuncName=MyUpper
+xBaseFuncName=MYUPPER
+ReturnType=STRING
+Param1Type=STRING
+Param2Type=
+Param3Type=
+
+[udf02]
+DLLName32=TestUDF.dll
+DLLFuncName=MonthName
+xBaseFuncName=CMONTH
+ReturnType=STRING
+Param1Type=NUMERIC
+Param2Type=
+Param3Type=
+
+[udf03]
+DLLName32=TestUDF.dll
+DLLFuncName=Seconds
+xBaseFuncName=SECONDS
+ReturnType=NUMERIC
+Param1Type=
+Param2Type=
+Param3Type=
+
+[udf04]
+DLLName32=TestUDF.dll
+DLLFuncName=IsUpper
+xBaseFuncName=ISUPPER
+ReturnType=LOGICAL
+Param1Type=STRING
+Param2Type=
+Param3Type=
+
+[udf05]
+DLLName32=TestUDF.dll
+DLLFuncName=Invert
+xBaseFuncName=INVERT
+ReturnType=STRING
+Param1Type=STRING
+Param2Type=
+Param3Type=
+
+[udf06]
+DLLName32=TestUDF.dll
+DLLFuncName=ABCHu
+xBaseFuncName=ABCHU
+ReturnType=STRING
+Param1Type=STRING
+Param2Type=
+Param3Type=
+
+[udf07]
+DLLName32=TestUDF.dll
+DLLFuncName=WinABCHu
+xBaseFuncName=WINABCHU
+ReturnType=STRING
+Param1Type=STRING
+Param2Type=
+Param3Type=

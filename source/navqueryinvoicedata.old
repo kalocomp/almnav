@@ -1,0 +1,654 @@
+﻿unit NAVQueryInvoiceData;
+
+interface
+
+uses NAV, Windows, System.StrUtils, SysUtils, XMLDoc, XMLIntf, XMLHandler, NAVTokenExchange, Main, DCPBase64,
+	Vcl.Dialogs, Winapi.Messages, Vcl.ExtCtrls, frxClass, frxDBSet, frxExportPDF;
+
+procedure GetInvoiceData( InNAVInvoice : TNAVInvoice );
+function MakeInvoiceData( InNAVInvoice : TNAVInvoice ) : string;
+
+implementation
+
+uses DateUtils, MailSending;
+
+procedure GetInvoiceData( InNAVInvoice : TNAVInvoice );
+var
+	cInvoiceData,cInvoice,cPDFName,cSeged		: string;
+	cMoneyPicture										: string;
+	XMLFile												: IXMLDocument;
+	MainNode,Level1Node,Level2Node,Level3Node	: IXMLNode;
+	Level4Node											: IXMLNode;
+	nLines,I												: integer;
+	ReportField											: TfrxComponent;
+begin
+	SetMySettings;
+	cInvoiceData := NAVQueryInvoiceData.MakeInvoiceData( InNAVInvoice );
+	if cInvoiceData = '' then begin
+		MainForm.MyShowBalloonHint( 'Hiba !!!', 'Hiba történt a számla adatainak lekérdezéskor...', bfError );
+	end else begin
+		MainForm.MyShowBalloonHint( 'Figyelem!!!', 'A számla adatai lekérdezve...', bfInfo );
+		cInvoice := Base64DecodeStr( AnsiString( cInvoiceData ));
+		cInvoice := UTF8Decode( cInvoice );
+		XMLFile := NewXMLDocument;
+		XMLFile.Encoding := 'UTF8';
+		XMLFile.Options := [ doNodeAutoIndent ];
+		XMLFile.LoadFromXML( cInvoice );
+		XMLFile.XML.Text := XMLDoc.FormatXMLData( XMLFile.XML.Text );
+XMLFile.XML.SaveToFile( 'SZAMLA.XML' );
+		XMLFile.Active := TRUE;
+		MainForm.InvLineTable.Active := TRUE;
+		MainForm.InvLineTable.EmptyDataSet;
+		MainForm.InvVATTable.Active := TRUE;
+		MainForm.InvVATTable.EmptyDataSet;
+// 1.1 NAV számla beolvasása
+		if ( LeftStr( InNAVInvoice.RequestVersion,1 ) = '1' ) then begin
+			MainNode := XMLFile.ChildNodes.FindNode( 'Invoice' );
+			if MainNode <> NIL then begin
+				MainNode := MainNode.ChildNodes.FindNode( 'invoiceExchange' );
+				Level1Node := MainNode.ChildNodes.FindNode( 'invoiceHead' );
+				if Level1Node <> NIL  then begin
+					Level2Node := Level1Node.ChildNodes.FindNode( 'supplierInfo' );
+					if Level2Node <> NIL then begin
+						Level3Node := Level2Node.ChildNodes.FindNode( 'supplierTaxNumber' );
+						if Level3Node <> NIL then begin
+							InvHeader.cSupplierTax := ReadNodeText( Level3Node, 'taxpayerId' );
+						end;
+						InvHeader.cSupplierName := ReadNodeText( Level2Node, 'supplierName' );
+						Level3Node := Level2Node.ChildNodes.FindNode( 'supplierAddress' );
+						if Level3Node <> NIL then begin
+							Level4Node := Level3Node.ChildNodes.FindNode( 'simpleAddress' );
+							if Level4Node <> NIL then begin
+								InvHeader.cSupplierAddress.cCountryCode := ReadNodeText( Level4Node, 'countryCode' );
+								InvHeader.cSupplierAddress.cPostalCode := ReadNodeText( Level4Node, 'postalCode' );
+								InvHeader.cSupplierAddress.cCity := ReadNodeText( Level4Node, 'city' );
+								InvHeader.cSupplierAddress.cStreet := ReadNodeText( Level4Node, 'additionalAddressDetail' );
+							end;
+						end;
+					end;
+					Level2Node := Level1Node.ChildNodes.FindNode( 'customerInfo' );
+					if Level2Node <> NIL then begin
+						Level3Node := Level2Node.ChildNodes.FindNode( 'customerTaxNumber' );
+						if Level3Node <> NIL then begin
+							InvHeader.cCustTax := ReadNodeText( Level3Node, 'taxpayerId' );
+						end;
+						InvHeader.cCustName := ReadNodeText( Level2Node, 'customerName' );
+						Level3Node := Level2Node.ChildNodes.FindNode( 'customerAddress' );
+						if Level3Node <> NIL then begin
+							Level4Node := Level3Node.ChildNodes.FindNode( 'simpleAddress' );
+							if Level4Node <> NIL then begin
+								InvHeader.cCustAddress.cCountryCode := ReadNodeText( Level4Node, 'countryCode' );
+								InvHeader.cCustAddress.cPostalCode := ReadNodeText( Level4Node, 'postalCode' );
+								InvHeader.cCustAddress.cCity := ReadNodeText( Level4Node, 'city' );
+								InvHeader.cCustAddress.cStreet := ReadNodeText( Level4Node, 'additionalAddressDetail' );
+							end;
+						end;
+					end;
+					Level2Node := Level1Node.ChildNodes.FindNode( 'invoiceData' );
+					if Level2Node <> NIL then begin
+						InvHeader.cInvNumber := ReadNodeText( Level2Node, 'invoiceNumber' );
+						InvHeader.dInvIssue := StrToDate( ReadNodeText( Level2Node, 'invoiceIssueDate' ), NAV.MySettings );
+						InvHeader.dInvDelivery := StrToDate( ReadNodeText( Level2Node, 'invoiceDeliveryDate' ), NAV.MySettings );
+						InvHeader.cCurrency := ReadNodeText( Level2Node, 'currencyCode' );
+						InvHeader.dInvPayment := StrToDate( ReadNodeText( Level2Node, 'paymentDate' ), NAV.MySettings );
+						InvHeader.cInvoiceAppearance := ReadNodeText( Level2Node, 'invoiceAppearance' );
+					end;
+				end;
+				Level1Node := MainNode.ChildNodes.FindNode( 'invoiceSummary' );
+				if Level1Node <> NIL  then begin
+					InvHeader.nInvoiceGrossAmount := StrToFloat( ReadNodeText( Level1Node, 'invoiceGrossAmount' ), NAV.MySettings );
+					Level2Node := Level1Node.ChildNodes.FindNode( 'summaryNormal' );
+					if Level2Node <> NIL then begin
+						InvHeader.nInvoiceNetAmount := StrToFloat( ReadNodeText( Level2Node, 'invoiceNetAmount' ), NAV.MySettings );
+						InvHeader.nInvoiceVATAmount := StrToFloat( ReadNodeText( Level2Node, 'invoiceVatAmount' ), NAV.MySettings );
+						InvHeader.nInvoiceVATAmountHUF := StrToFloat( ReadNodeText( Level2Node, 'invoiceVatAmountHUF' ), NAV.MySettings );
+						nLines := Level2Node.ChildNodes.Count - 3;
+						for I := 0 to nLines - 1 do begin
+							MainForm.InvVATTable.Append;
+							Level3Node := Level2Node.ChildNodes[ I ];
+							Level4Node := Level3Node.ChildNodes.FindNode( 'vatRate' );
+							if Level4Node <> NIL then begin
+								MainForm.InvVATTable.FieldByName( 'VATPERCENTAGE' ).AsFloat := 100 * StrToFloat( ReadNodeText( Level4Node, 'vatPercentage' ), NAV.MySettings );
+								MainForm.InvVATTable.FieldByName( 'VATNAME' ).AsString := FormatFloat( '##0', 100 * StrToFloat( ReadNodeText( Level4Node, 'vatPercentage' ), NAV.MySettings )) + ' %-os ÁFA';
+							end;
+							MainForm.InvVATTable.FieldByName( 'VATNETAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level3Node, 'vatRateNetAmount' ), NAV.MySettings );
+							MainForm.InvVATTable.FieldByName( 'VATVATAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level3Node, 'vatRateVatAmount' ), NAV.MySettings );
+							MainForm.InvVATTable.FieldByName( 'VATVATAMOUNTHUF' ).AsFloat := StrToFloat( ReadNodeText( Level3Node, 'vatRateVatAmountHUF' ), NAV.MySettings );
+							MainForm.InvVATTable.FieldByName( 'VATGROSSAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level3Node, 'vatRateGrossAmount' ), NAV.MySettings );
+							MainForm.InvVATTable.Post;
+						end;
+					end;
+				end;
+				Level1Node := MainNode.ChildNodes.FindNode( 'invoiceLines' );
+				if Level1Node <> NIL  then begin
+					nLines := Level1Node.ChildNodes.Count;
+					for I := 0 to nLines - 1 do begin
+						Level2Node := Level1Node.ChildNodes.FindNode( 'line' );
+						Level2Node := Level1Node.ChildNodes[ I ];
+						if Level2Node <> NIL then begin
+							MainForm.InvLineTable.Append;
+							MainForm.InvLineTable.FieldByName( 'LINENUMBER' ).AsInteger := StrToInt( ReadNodeText( Level2Node, 'lineNumber' ));
+							Level3Node := Level2Node.ChildNodes.FindNode( 'productCodes' );
+							if Level3Node <> NIL then begin
+								Level4Node := Level3Node.ChildNodes.FindNode( 'productCode' );
+								if Level4Node <> NIL then begin
+									MainForm.InvLineTable.FieldByName( 'PRODUCTCODECATEGORY' ).AsString := ReadNodeText( Level4Node, 'productCodeCategory' );
+									MainForm.InvLineTable.FieldByName( 'PRODUCTCODEVALUE' ).AsString := ReadNodeText( Level4Node, 'productCodeValue' );
+								end;
+							end;
+							MainForm.InvLineTable.FieldByName( 'PRODUCTNAME' ).AsString := ReadNodeText( Level2Node, 'lineDescription' );
+							MainForm.InvLineTable.FieldByName( 'QUANTITY' ).AsFloat := StrToFloat( ReadNodeText( Level2Node, 'quantity' ), NAV.MySettings );
+							MainForm.InvLineTable.FieldByName( 'UNIT' ).AsString := ReadNodeText( Level2Node, 'unitOfMeasure' );
+							cseged := ReadNodeText( Level2Node, 'unitPrice' );
+							MainForm.InvLineTable.FieldByName( 'UNITPRICE' ).AsFloat := StrToFloat( cSeged, NAV.MySettings );
+							Level3Node := Level2Node.ChildNodes.FindNode( 'lineAmountsNormal' );
+							if Level3Node <> NIL then begin
+								MainForm.InvLineTable.FieldByName( 'NETAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level3Node, 'lineNetAmount' ), NAV.MySettings );
+								Level4Node := Level3Node.ChildNodes.FindNode( 'lineVatRate' );
+								if Level4Node <> NIL then begin
+									MainForm.InvLineTable.FieldByName( 'VATPERCENT' ).AsFloat := 100 * StrToFloat( ReadNodeText( Level4Node, 'vatPercentage' ), NAV.MySettings );
+								end;
+								MainForm.InvLineTable.FieldByName( 'VATAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level3Node, 'lineVatAmount' ), NAV.MySettings );
+								MainForm.InvLineTable.FieldByName( 'VATAMOUNTHUF' ).AsFloat := StrToFloat( ReadNodeText( Level3Node, 'lineVatAmountHUF' ), NAV.MySettings );
+								MainForm.InvLineTable.FieldByName( 'GROSSAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level3Node, 'lineGrossAmountNormal' ), NAV.MySettings );
+							end;
+							MainForm.InvLineTable.Post;
+						end;
+					end;
+				end;
+				Level1Node := MainNode.ChildNodes.FindNode( 'invoiceLines' );
+				if Level1Node <> NIL  then begin
+					nLines := Level1Node.ChildNodes.Count;
+					for I := 0 to nLines - 1 do begin
+						Level2Node := Level1Node.ChildNodes.FindNode( 'line' );
+						Level2Node := Level1Node.ChildNodes[ I ];
+						if Level2Node <> NIL then begin
+							MainForm.InvLineTable.Append;
+							MainForm.InvLineTable.FieldByName( 'LINENUMBER' ).AsInteger := StrToInt( ReadNodeText( Level2Node, 'lineNumber' ));
+							Level3Node := Level2Node.ChildNodes.FindNode( 'productCodes' );
+							if Level3Node <> NIL then begin
+								Level4Node := Level3Node.ChildNodes.FindNode( 'productCode' );
+								if Level4Node <> NIL then begin
+									MainForm.InvLineTable.FieldByName( 'PRODUCTCODECATEGORY' ).AsString := ReadNodeText( Level4Node, 'productCodeCategory' );
+									MainForm.InvLineTable.FieldByName( 'PRODUCTCODEVALUE' ).AsString := ReadNodeText( Level4Node, 'productCodeValue' );
+								end;
+							end;
+							MainForm.InvLineTable.FieldByName( 'PRODUCTNAME' ).AsString := ReadNodeText( Level2Node, 'lineDescription' );
+							MainForm.InvLineTable.FieldByName( 'QUANTITY' ).AsFloat := StrToFloat( ReadNodeText( Level2Node, 'quantity' ), NAV.MySettings );
+							MainForm.InvLineTable.FieldByName( 'UNIT' ).AsString := ReadNodeText( Level2Node, 'unitOfMeasure' );
+							cseged := ReadNodeText( Level2Node, 'unitPrice' );
+							MainForm.InvLineTable.FieldByName( 'UNITPRICE' ).AsFloat := StrToFloat( cSeged, NAV.MySettings );
+							Level3Node := Level2Node.ChildNodes.FindNode( 'lineAmountsNormal' );
+							if Level3Node <> NIL then begin
+								MainForm.InvLineTable.FieldByName( 'NETAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level3Node, 'lineNetAmount' ), NAV.MySettings );
+								Level4Node := Level3Node.ChildNodes.FindNode( 'lineVatRate' );
+								if Level4Node <> NIL then begin
+									MainForm.InvLineTable.FieldByName( 'VATPERCENT' ).AsFloat := 100 * StrToFloat( ReadNodeText( Level4Node, 'vatPercentage' ), NAV.MySettings );
+								end;
+								MainForm.InvLineTable.FieldByName( 'VATAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level3Node, 'lineVatAmount' ), NAV.MySettings );
+								MainForm.InvLineTable.FieldByName( 'VATAMOUNTHUF' ).AsFloat := StrToFloat( ReadNodeText( Level3Node, 'lineVatAmountHUF' ), NAV.MySettings );
+								MainForm.InvLineTable.FieldByName( 'GROSSAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level3Node, 'lineGrossAmountNormal' ), NAV.MySettings );
+							end;
+							MainForm.InvLineTable.Post;
+						end;
+					end;
+				end;
+			end;
+		end;
+// 2.0 NAV számla beolvasása
+		if ( InNAVInvoice.RequestVersion = '2.0' ) then begin
+			MainNode := XMLFile.ChildNodes.FindNode( 'InvoiceData' );
+			if MainNode <> NIL then begin
+				InvHeader.cInvNumber := ReadNodeText( MainNode, 'invoiceNumber' );
+				InvHeader.dInvIssue := StrToDate( ReadNodeText( MainNode, 'invoiceIssueDate' ), NAV.MySettings );
+				MainNode := MainNode.ChildNodes.FindNode( 'invoiceMain' );
+				if MainNode <> NIL  then begin
+					MainNode := MainNode.ChildNodes.FindNode( 'invoice' );
+					if MainNode <> NIL  then begin
+						Level1Node := MainNode.ChildNodes.FindNode( 'invoiceHead' );
+						Level2Node := Level1Node.ChildNodes.FindNode( 'supplierInfo' );
+						if Level2Node <> NIL then begin
+							Level3Node := Level2Node.ChildNodes.FindNode( 'supplierTaxNumber' );
+							if Level3Node <> NIL then begin
+								InvHeader.cSupplierTax := ReadNodeText( Level3Node, 'taxpayerId' );
+							end;
+							InvHeader.cSupplierName := ReadNodeText( Level2Node, 'supplierName' );
+							Level3Node := Level2Node.ChildNodes.FindNode( 'supplierAddress' );
+							if Level3Node <> NIL then begin
+								Level4Node := Level3Node.ChildNodes.FindNode( 'simpleAddress' );
+								if Level4Node <> NIL then begin
+									InvHeader.cSupplierAddress.cCountryCode := ReadNodeText( Level4Node, 'countryCode' );
+									InvHeader.cSupplierAddress.cPostalCode := ReadNodeText( Level4Node, 'postalCode' );
+									InvHeader.cSupplierAddress.cCity := ReadNodeText( Level4Node, 'city' );
+									InvHeader.cSupplierAddress.cStreet := ReadNodeText( Level4Node, 'additionalAddressDetail' );
+								end;
+							end;
+							Level2Node := Level1Node.ChildNodes.FindNode( 'customerInfo' );
+							if Level2Node <> NIL then begin
+								Level3Node := Level2Node.ChildNodes.FindNode( 'customerTaxNumber' );
+								if Level3Node <> NIL then begin
+									InvHeader.cCustTax := ReadNodeText( Level3Node, 'taxpayerId' );
+								end;
+								InvHeader.cCustName := ReadNodeText( Level2Node, 'customerName' );
+								Level3Node := Level2Node.ChildNodes.FindNode( 'customerAddress' );
+								if Level3Node <> NIL then begin
+									Level4Node := Level3Node.ChildNodes.FindNode( 'simpleAddress' );
+									if Level4Node <> NIL then begin
+										InvHeader.cCustAddress.cCountryCode := ReadNodeText( Level4Node, 'countryCode' );
+										InvHeader.cCustAddress.cPostalCode := ReadNodeText( Level4Node, 'postalCode' );
+										InvHeader.cCustAddress.cCity := ReadNodeText( Level4Node, 'city' );
+										InvHeader.cCustAddress.cStreet := ReadNodeText( Level4Node, 'additionalAddressDetail' );
+									end;
+								end;
+							end;
+							Level2Node := Level1Node.ChildNodes.FindNode( 'invoiceDetail' );
+							if Level2Node <> NIL then begin
+								InvHeader.cInvoiceCategory := ReadNodeText( Level2Node, 'invoiceCategory' );
+								InvHeader.dInvDelivery := StrToDate( ReadNodeText( Level2Node, 'invoiceDeliveryDate' ), NAV.MySettings );
+								InvHeader.cCurrency := ReadNodeText( Level2Node, 'currencyCode' );
+								InvHeader.dInvPayment := StrToDate( ReadNodeText( Level2Node, 'paymentDate' ), NAV.MySettings );
+								InvHeader.cInvoiceAppearance := ReadNodeText( Level2Node, 'invoiceAppearance' );
+							end;
+						end;
+						Level1Node := MainNode.ChildNodes.FindNode( 'invoiceSummary' );
+						if Level1Node <> NIL  then begin
+							if Level1Node <> NIL  then begin
+								Level2Node := Level1Node.ChildNodes.FindNode( 'summaryGrossData' );
+								InvHeader.nInvoiceGrossAmount := StrToFloat( ReadNodeText( Level2Node, 'invoiceGrossAmount' ), NAV.MySettings );
+								InvHeader.nInvoiceGrossAmountHUF := StrToFloat( ReadNodeText( Level2Node, 'invoiceGrossAmountHUF' ), NAV.MySettings );
+							end;
+						end;
+						Level2Node := Level1Node.ChildNodes.FindNode( 'summaryNormal' );
+						if Level2Node <> NIL then begin
+							InvHeader.nInvoiceNetAmount := StrToFloat( ReadNodeText( Level2Node, 'invoiceNetAmount' ), NAV.MySettings );
+							InvHeader.nInvoiceNetAmountHUF := StrToFloat( ReadNodeText( Level2Node, 'invoiceNetAmountHUF' ), NAV.MySettings );
+							InvHeader.nInvoiceVATAmount := StrToFloat( ReadNodeText( Level2Node, 'invoiceVatAmount' ), NAV.MySettings );
+							InvHeader.nInvoiceVATAmountHUF := StrToFloat( ReadNodeText( Level2Node, 'invoiceVatAmountHUF' ), NAV.MySettings );
+							nLines := Level2Node.ChildNodes.Count - 4;
+							Level3Node := Level2Node.ChildNodes.FindNode( 'summaryByVatRate' );
+							if Level3Node <> NIL then begin
+								for I := 0 to nLines - 1 do begin
+									MainForm.InvVATTable.Append;
+									Level3Node := Level2Node.ChildNodes[ I ];
+									Level4Node := Level3Node.ChildNodes.FindNode( 'vatRate' );
+									if Level4Node <> NIL then begin
+										MainForm.InvVATTable.FieldByName( 'VATPERCENTAGE' ).AsFloat := 100 * StrToFloat( ReadNodeText( Level4Node, 'vatPercentage' ), NAV.MySettings );
+										MainForm.InvVATTable.FieldByName( 'VATNAME' ).AsString := FormatFloat( '##0', 100 * StrToFloat( ReadNodeText( Level4Node, 'vatPercentage' ), NAV.MySettings )) + ' %-os ÁFA';
+									end;
+									Level4Node := Level3Node.ChildNodes.FindNode( 'vatRateNetData' );
+									if Level4Node <> NIL then begin
+										MainForm.InvVATTable.FieldByName( 'VATNETAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'vatRateNetAmount' ), NAV.MySettings );
+										MainForm.InvVATTable.FieldByName( 'VATNETAMOUNTHUF' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'vatRateNetAmountHUF' ), NAV.MySettings );
+									end;
+									Level4Node := Level3Node.ChildNodes.FindNode( 'vatRateVatData' );
+									if Level4Node <> NIL then begin
+										MainForm.InvVATTable.FieldByName( 'VATVATAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'vatRateVatAmount' ), NAV.MySettings );
+										MainForm.InvVATTable.FieldByName( 'VATVATAMOUNTHUF' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'vatRateVatAmountHUF' ), NAV.MySettings );
+									end;
+									Level4Node := Level3Node.ChildNodes.FindNode( 'vatRateGrossData' );
+									if Level4Node <> NIL then begin
+										MainForm.InvVATTable.FieldByName( 'VATGROSSAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'vatRateGrossAmount' ), NAV.MySettings );
+										MainForm.InvVATTable.FieldByName( 'VATGROSSAMOUNTHUF' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'vatRateGrossAmountHUF' ), NAV.MySettings );
+									end;
+									MainForm.InvVATTable.Post;
+								end;
+							end;
+						end;
+						Level2Node := Level1Node.ChildNodes.FindNode( 'summaryGrossData' );
+						if Level2Node <> NIL then begin
+							InvHeader.nInvoiceGrossAmount := StrToFloat( ReadNodeText( Level2Node, 'invoiceGrossAmount' ), NAV.MySettings );
+							InvHeader.nInvoiceGrossAmountHUF := StrToFloat( ReadNodeText( Level2Node, 'invoiceGrossAmountHUF' ), NAV.MySettings );
+						end;
+					end;
+				end;
+				Level1Node := MainNode.ChildNodes.FindNode( 'invoiceLines' );
+				if Level1Node <> NIL  then begin
+					nLines := Level1Node.ChildNodes.Count;
+					for I := 0 to nLines - 1 do begin
+						Level2Node := Level1Node.ChildNodes.FindNode( 'line' );
+						Level2Node := Level1Node.ChildNodes[ I ];
+						if Level2Node <> NIL then begin
+							MainForm.InvLineTable.Append;
+							MainForm.InvLineTable.FieldByName( 'LINENUMBER' ).AsInteger := StrToInt( ReadNodeText( Level2Node, 'lineNumber' ));
+							Level3Node := Level2Node.ChildNodes.FindNode( 'productCodes' );
+							if Level3Node <> NIL then begin
+								Level4Node := Level3Node.ChildNodes.FindNode( 'productCode' );
+								if Level4Node <> NIL then begin
+									MainForm.InvLineTable.FieldByName( 'PRODUCTCODECATEGORY' ).AsString := ReadNodeText( Level4Node, 'productCodeCategory' );
+									MainForm.InvLineTable.FieldByName( 'PRODUCTCODEVALUE' ).AsString := ReadNodeText( Level4Node, 'productCodeValue' );
+								end;
+							end;
+							MainForm.InvLineTable.FieldByName( 'PRODUCTNAME' ).AsString := ReadNodeText( Level2Node, 'lineDescription' );
+							MainForm.InvLineTable.FieldByName( 'QUANTITY' ).AsFloat := StrToFloat( ReadNodeText( Level2Node, 'quantity' ), NAV.MySettings );
+							MainForm.InvLineTable.FieldByName( 'UNIT' ).AsString := ReadNodeText( Level2Node, 'unitOfMeasure' );
+							cseged := ReadNodeText( Level2Node, 'unitPrice' );
+							MainForm.InvLineTable.FieldByName( 'UNITPRICE' ).AsFloat := StrToFloat( cSeged, NAV.MySettings );
+							Level3Node := Level2Node.ChildNodes.FindNode( 'lineAmountsNormal' );
+							if Level3Node <> NIL then begin
+								Level4Node := Level3Node.ChildNodes.FindNode( 'lineNetAmountData' );
+								if Level4Node <> NIL then begin
+									MainForm.InvLineTable.FieldByName( 'NETAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'lineNetAmount' ), NAV.MySettings );
+									MainForm.InvLineTable.FieldByName( 'NETAMOUNTHUF' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'lineNetAmountHUF' ), NAV.MySettings );
+								end;
+								Level4Node := Level3Node.ChildNodes.FindNode( 'lineVatRate' );
+								if Level4Node <> NIL then begin
+									MainForm.InvLineTable.FieldByName( 'VATPERCENT' ).AsFloat := 100 * StrToFloat( ReadNodeText( Level4Node, 'vatPercentage' ), NAV.MySettings );
+								end;
+								Level4Node := Level3Node.ChildNodes.FindNode( 'lineVatData' );
+								if Level4Node <> NIL then begin
+									MainForm.InvLineTable.FieldByName( 'VATAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'lineVatAmount' ), NAV.MySettings );
+									MainForm.InvLineTable.FieldByName( 'VATAMOUNTHUF' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'lineVatAmountHUF' ), NAV.MySettings );
+								end;
+								Level4Node := Level3Node.ChildNodes.FindNode( 'lineGrossAmountData' );
+								if Level4Node <> NIL then begin
+									MainForm.InvLineTable.FieldByName( 'GROSSAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'lineGrossAmountNormal' ), NAV.MySettings );
+									MainForm.InvLineTable.FieldByName( 'GROSSAMOUNTHUF' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'lineGrossAmountNormalHUF' ), NAV.MySettings );
+								end;
+							end;
+							MainForm.InvLineTable.Post;
+						end;
+					end;
+				end;
+			end;
+		end;
+// 3.0 NAV számla beolvasása
+		if ( InNAVInvoice.RequestVersion = '3.0' ) then begin
+			MainNode := XMLFile.ChildNodes.FindNode( 'InvoiceData','' );
+			if MainNode <> NIL then begin
+				InvHeader.cInvNumber := ReadNodeText( MainNode, 'invoiceNumber' );
+				InvHeader.dInvIssue := StrToDate( ReadNodeText( MainNode, 'invoiceIssueDate' ), NAV.MySettings );
+				MainNode := MainNode.ChildNodes.FindNode( 'invoiceMain','' );
+				if MainNode <> NIL  then begin
+					MainNode := MainNode.ChildNodes.FindNode( 'invoice','' );
+					if MainNode <> NIL  then begin
+						Level1Node := MainNode.ChildNodes.FindNode( 'invoiceHead','' );
+						Level2Node := Level1Node.ChildNodes.FindNode( 'supplierInfo','' );
+						if Level2Node <> NIL then begin
+							Level3Node := Level2Node.ChildNodes.FindNode( 'supplierTaxNumber','' );
+							if Level3Node <> NIL then begin
+								InvHeader.cSupplierTax := ReadNodeText( Level3Node, cNAVReceiveSchema + 'taxpayerId' );
+							end;
+							InvHeader.cSupplierName := ReadNodeText( Level2Node, 'supplierName' );
+							Level3Node := Level2Node.ChildNodes.FindNode( 'supplierAddress','' );
+							if Level3Node <> NIL then begin
+								Level4Node := Level3Node.ChildNodes.FindNode( cNAVReceiveSchema + 'simpleAddress','' );
+								if Level4Node <> NIL then begin
+									InvHeader.cSupplierAddress.cCountryCode := ReadNodeText( Level4Node, cNAVReceiveSchema + 'countryCode' );
+									InvHeader.cSupplierAddress.cPostalCode := ReadNodeText( Level4Node, cNAVReceiveSchema + 'postalCode' );
+									InvHeader.cSupplierAddress.cCity := ReadNodeText( Level4Node, cNAVReceiveSchema + 'city' );
+									InvHeader.cSupplierAddress.cStreet := ReadNodeText( Level4Node, cNAVReceiveSchema + 'additionalAddressDetail' );
+								end;
+							end;
+							Level2Node := Level1Node.ChildNodes.FindNode( 'customerInfo','' );
+							if Level2Node <> NIL then begin
+								Level3Node := Level2Node.ChildNodes.FindNode( 'customerVatData','' );
+								if Level3Node <> NIL then begin
+									Level4Node := Level3Node.ChildNodes.FindNode( 'customerTaxNumber','' );
+									if Level4Node <> NIL then begin
+										InvHeader.cCustTax := ReadNodeText( Level4Node, cNAVReceiveSchema + 'taxpayerId' );
+									end;
+								end;
+								InvHeader.cCustName := ReadNodeText( Level2Node, 'customerName' );
+								Level3Node := Level2Node.ChildNodes.FindNode( 'customerAddress','' );
+								if Level3Node <> NIL then begin
+									Level4Node := Level3Node.ChildNodes.FindNode( cNAVReceiveSchema + 'simpleAddress','' );
+									if Level4Node <> NIL then begin
+										InvHeader.cCustAddress.cCountryCode := ReadNodeText( Level4Node, cNAVReceiveSchema + 'countryCode' );
+										InvHeader.cCustAddress.cPostalCode := ReadNodeText( Level4Node, cNAVReceiveSchema + 'postalCode' );
+										InvHeader.cCustAddress.cCity := ReadNodeText( Level4Node, cNAVReceiveSchema + 'city' );
+										InvHeader.cCustAddress.cStreet := ReadNodeText( Level4Node, cNAVReceiveSchema + 'additionalAddressDetail' );
+									end;
+								end;
+							end;
+							Level2Node := Level1Node.ChildNodes.FindNode( 'invoiceDetail','' );
+							if Level2Node <> NIL then begin
+								InvHeader.cInvoiceCategory := ReadNodeText( Level2Node, 'invoiceCategory' );
+								InvHeader.dInvDelivery := StrToDate( ReadNodeText( Level2Node, 'invoiceDeliveryDate' ), NAV.MySettings );
+								InvHeader.cCurrency := ReadNodeText( Level2Node, 'currencyCode' );
+								InvHeader.dInvPayment := StrToDate( ReadNodeText( Level2Node, 'paymentDate' ), NAV.MySettings );
+								InvHeader.cInvoiceAppearance := ReadNodeText( Level2Node, 'invoiceAppearance' );
+							end;
+						end;
+						Level1Node := MainNode.ChildNodes.FindNode( 'invoiceSummary','' );
+						if Level1Node <> NIL  then begin
+							if Level1Node <> NIL  then begin
+								Level2Node := Level1Node.ChildNodes.FindNode( 'summaryGrossData','' );
+								InvHeader.nInvoiceGrossAmount := StrToFloat( ReadNodeText( Level2Node, 'invoiceGrossAmount' ), NAV.MySettings );
+								InvHeader.nInvoiceGrossAmountHUF := StrToFloat( ReadNodeText( Level2Node, 'invoiceGrossAmountHUF' ), NAV.MySettings );
+							end;
+						end;
+						Level2Node := Level1Node.ChildNodes.FindNode( 'summaryNormal','' );
+						if Level2Node <> NIL then begin
+							InvHeader.nInvoiceNetAmount := StrToFloat( ReadNodeText( Level2Node, 'invoiceNetAmount' ), NAV.MySettings );
+							InvHeader.nInvoiceNetAmountHUF := StrToFloat( ReadNodeText( Level2Node, 'invoiceNetAmountHUF' ), NAV.MySettings );
+							InvHeader.nInvoiceVATAmount := StrToFloat( ReadNodeText( Level2Node, 'invoiceVatAmount' ), NAV.MySettings );
+							InvHeader.nInvoiceVATAmountHUF := StrToFloat( ReadNodeText( Level2Node, 'invoiceVatAmountHUF' ), NAV.MySettings );
+							nLines := Level2Node.ChildNodes.Count - 4;
+							Level3Node := Level2Node.ChildNodes.FindNode( 'summaryByVatRate','' );
+							if Level3Node <> NIL then begin
+								for I := 0 to nLines - 1 do begin
+									MainForm.InvVATTable.Append;
+									Level3Node := Level2Node.ChildNodes[ I ];
+									Level4Node := Level3Node.ChildNodes.FindNode( 'vatRate','' );
+									if Level4Node <> NIL then begin
+										MainForm.InvVATTable.FieldByName( 'VATPERCENTAGE' ).AsFloat := 100 * StrToFloat( ReadNodeText( Level4Node, 'vatPercentage' ), NAV.MySettings );
+										MainForm.InvVATTable.FieldByName( 'VATNAME' ).AsString := FormatFloat( '##0', 100 * StrToFloat( ReadNodeText( Level4Node, 'vatPercentage' ), NAV.MySettings )) + ' %-os ÁFA';
+									end;
+									Level4Node := Level3Node.ChildNodes.FindNode( 'vatRateNetData','' );
+									if Level4Node <> NIL then begin
+										MainForm.InvVATTable.FieldByName( 'VATNETAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'vatRateNetAmount' ), NAV.MySettings );
+										MainForm.InvVATTable.FieldByName( 'VATNETAMOUNTHUF' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'vatRateNetAmountHUF' ), NAV.MySettings );
+									end;
+									Level4Node := Level3Node.ChildNodes.FindNode( 'vatRateVatData','' );
+									if Level4Node <> NIL then begin
+										MainForm.InvVATTable.FieldByName( 'VATVATAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'vatRateVatAmount' ), NAV.MySettings );
+										MainForm.InvVATTable.FieldByName( 'VATVATAMOUNTHUF' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'vatRateVatAmountHUF' ), NAV.MySettings );
+									end;
+									Level4Node := Level3Node.ChildNodes.FindNode( 'vatRateGrossData','' );
+									if Level4Node <> NIL then begin
+										MainForm.InvVATTable.FieldByName( 'VATGROSSAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'vatRateGrossAmount' ), NAV.MySettings );
+										MainForm.InvVATTable.FieldByName( 'VATGROSSAMOUNTHUF' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'vatRateGrossAmountHUF' ), NAV.MySettings );
+									end;
+									MainForm.InvVATTable.Post;
+								end;
+							end;
+						end;
+						Level2Node := Level1Node.ChildNodes.FindNode( 'summaryGrossData','' );
+						if Level2Node <> NIL then begin
+							InvHeader.nInvoiceGrossAmount := StrToFloat( ReadNodeText( Level2Node, 'invoiceGrossAmount' ), NAV.MySettings );
+							InvHeader.nInvoiceGrossAmountHUF := StrToFloat( ReadNodeText( Level2Node, 'invoiceGrossAmountHUF' ), NAV.MySettings );
+						end;
+					end;
+				end;
+				Level1Node := MainNode.ChildNodes.FindNode( 'invoiceLines','' );
+				if Level1Node <> NIL  then begin
+					nLines := Level1Node.ChildNodes.Count;
+					for I := 1 to nLines - 1 do begin
+						Level2Node := Level1Node.ChildNodes.FindNode( 'line','' );
+						Level2Node := Level1Node.ChildNodes[ I ];
+						if Level2Node <> NIL then begin
+							MainForm.InvLineTable.Append;
+							MainForm.InvLineTable.FieldByName( 'LINENUMBER' ).AsInteger := StrToInt( ReadNodeText( Level2Node, 'lineNumber' ));
+							Level3Node := Level2Node.ChildNodes.FindNode( 'productCodes','' );
+							if Level3Node <> NIL then begin
+								Level4Node := Level3Node.ChildNodes.FindNode( 'productCode','' );
+								if Level4Node <> NIL then begin
+									MainForm.InvLineTable.FieldByName( 'PRODUCTCODECATEGORY' ).AsString := ReadNodeText( Level4Node, 'productCodeCategory' );
+									MainForm.InvLineTable.FieldByName( 'PRODUCTCODEVALUE' ).AsString := ReadNodeText( Level4Node, 'productCodeValue' );
+								end;
+							end;
+							MainForm.InvLineTable.FieldByName( 'PRODUCTNAME' ).AsString := ReadNodeText( Level2Node, 'lineDescription' );
+							MainForm.InvLineTable.FieldByName( 'QUANTITY' ).AsFloat := StrToFloat( ReadNodeText( Level2Node, 'quantity' ), NAV.MySettings );
+							MainForm.InvLineTable.FieldByName( 'UNIT' ).AsString := ReadNodeText( Level2Node, 'unitOfMeasure' );
+							cseged := ReadNodeText( Level2Node, 'unitPrice' );
+							MainForm.InvLineTable.FieldByName( 'UNITPRICE' ).AsFloat := StrToFloat( cSeged, NAV.MySettings );
+							Level3Node := Level2Node.ChildNodes.FindNode( 'lineAmountsNormal','' );
+							if Level3Node <> NIL then begin
+								Level4Node := Level3Node.ChildNodes.FindNode( 'lineNetAmountData','' );
+								if Level4Node <> NIL then begin
+									MainForm.InvLineTable.FieldByName( 'NETAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'lineNetAmount' ), NAV.MySettings );
+									MainForm.InvLineTable.FieldByName( 'NETAMOUNTHUF' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'lineNetAmountHUF' ), NAV.MySettings );
+								end;
+								Level4Node := Level3Node.ChildNodes.FindNode( 'lineVatRate','' );
+								if Level4Node <> NIL then begin
+									MainForm.InvLineTable.FieldByName( 'VATPERCENT' ).AsFloat := 100 * StrToFloat( ReadNodeText( Level4Node, 'vatPercentage' ), NAV.MySettings );
+								end;
+								Level4Node := Level3Node.ChildNodes.FindNode( 'lineVatData','' );
+								if Level4Node <> NIL then begin
+									MainForm.InvLineTable.FieldByName( 'VATAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'lineVatAmount' ), NAV.MySettings );
+									MainForm.InvLineTable.FieldByName( 'VATAMOUNTHUF' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'lineVatAmountHUF' ), NAV.MySettings );
+								end;
+								Level4Node := Level3Node.ChildNodes.FindNode( 'lineGrossAmountData','' );
+								if Level4Node <> NIL then begin
+									MainForm.InvLineTable.FieldByName( 'GROSSAMOUNT' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'lineGrossAmountNormal' ), NAV.MySettings );
+									MainForm.InvLineTable.FieldByName( 'GROSSAMOUNTHUF' ).AsFloat := StrToFloat( ReadNodeText( Level4Node, 'lineGrossAmountNormalHUF' ), NAV.MySettings );
+								end;
+							end;
+							MainForm.InvLineTable.Post;
+						end;
+					end;
+				end;
+			end;
+		end;
+		if ( InvHeader.cCurrency = 'HUF' ) then begin
+			cMoneyPicture := '### ### ##0.00 HUF';
+		end else begin
+			cMoneyPicture := '### ### ##0 ' + InvHeader.cCurrency;
+		end;
+		cPDFName := MainForm.cAppPath + '\pdf\' + InvHeader.cTransactionID + '.pdf';
+		if FileExists( cPDFName ) then begin
+			if ( not DeleteFile( cPDFName )) then begin
+				MessageDlg( 'A korábbi lista állomány nem törölhetõ !!!', mtWarning, [ mbOK ], 0 );
+			end;
+		end;
+		if FileExists( cPDFName ) then begin
+			MessageDlg( 'A lista nem hozható létre !!!', mtWarning, [ mbOK ], 0 );
+			Exit;
+		end;
+		if ( not MainForm.InvoiceReport.LoadFromFile( MainForm.cAppPath + '\invoice.fr3' )) then begin
+			MessageDlg( 'Nem sikerült a lista betöltése ! (' + MainForm.cAppPath + '\invoice.fr3)',mtError,[ mbOK ], 0 );
+			Exit;
+		end;
+		MainForm.PDFInvoice.ShowDialog := FALSE;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'UnitPriceMemo' ))).DisplayFormat.FormatStr := '### ### ##0.00 ' + InvHeader.cCurrency;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'NetAmountMemo' ))).DisplayFormat.FormatStr := cMoneyPicture;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'NetAmountHUFMemo' ))).DisplayFormat.FormatStr := '### ### ##0.00 HUF';
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'VATAmountMemo' ))).DisplayFormat.FormatStr := cMoneyPicture;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'VATAmountHUFMemo' ))).DisplayFormat.FormatStr := '### ### ##0.00 HUF';
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'GrossAmountMemo' ))).DisplayFormat.FormatStr := cMoneyPicture;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'GrossAmountHUFMemo' ))).DisplayFormat.FormatStr := '### ### ##0.00 HUF';
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'SupplierNameMemo' ))).Text := InvHeader.cSupplierName;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'SupplierTaxMemo' ))).Text := InvHeader.cSupplierTax;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'SupplierCountryMemo' ))).Text := InvHeader.cSupplierAddress.cCountryCode;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'SupplierPostalCodeMemo' ))).Text := InvHeader.cSupplierAddress.cPostalCode;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'SupplierCityMemo' ))).Text := InvHeader.cSupplierAddress.cCity;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'SupplierAddressMemo' ))).Text := InvHeader.cSupplierAddress.cStreet;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'CustomerNameMemo' ))).Text := InvHeader.cCustName;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'CustomerTaxMemo' ))).Text := InvHeader.cCustTax;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'CustomerCountryMemo' ))).Text := InvHeader.cCustAddress.cCountryCode;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'CustomerPostalCodeMemo' ))).Text := InvHeader.cCustAddress.cPostalCode;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'CustomerCityMemo' ))).Text := InvHeader.cCustAddress.cCity;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'CustomerAddressMemo' ))).Text := InvHeader.cCustAddress.cStreet;
+
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'LoginMemo' ))).Text := InvHeader.cInsUser;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'InsDateMemo' ))).Text := FormatDateTime( 'yyyy.mm.dd hh:MM:ss', InvHeader.dInsDate );
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'InvoiceApperanceMemo' ))).Text := InvHeader.cInvoiceAppearance;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'TransactionIDMemo' ))).Text := InvHeader.cTransactionID;
+
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'InvoiceNumberMemo' ))).Text := InvHeader.cInvNumber;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'InvoiceDeliveryDateMemo' ))).Text := FormatDateTime( 'yyyy.mm.dd', InvHeader.dInvDelivery );
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'InvoiceIssueDateMemo' ))).Text := FormatDateTime( 'yyyy.mm.dd', InvHeader.dInvIssue );
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'PaymentDateMemo' ))).Text := FormatDateTime( 'yyyy.mm.dd', InvHeader.dInvPayment );
+
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'InvNetAmountMemo' ))).Text := FormatFloat( cMoneyPicture, InvHeader.nNetAmount );
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'InvNetAmountHUFMemo' ))).Text := FormatFloat( '### ### ##0.00 HUF', InvHeader.nInvoiceNetAmountHUF );
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'InvVATAmountMemo' ))).Text := FormatFloat( cMoneyPicture, InvHeader.nInvoiceVATAmount );
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'InvVATAmountHUFMemo' ))).Text := FormatFloat( '### ### ##0.00 HUF', InvHeader.nInvoiceVATAmountHUF );
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'InvGrossAmountMemo' ))).Text := FormatFloat( cMoneyPicture, InvHeader.nInvoiceGrossAmount );
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'InvGrossAmountHUFMemo' ))).Text := FormatFloat( '### ### ##0.00 HUF', InvHEader.nInvoiceGrossAmountHUF );
+
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'SumVATNETMemo' ))).DisplayFormat.FormatStr := cMoneyPicture;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'SumVATNETHUFMemo' ))).DisplayFormat.FormatStr := '### ### ##0.00 HUF';
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'SumVATVATMemo' ))).DisplayFormat.FormatStr := cMoneyPicture;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'SumVATVATHUFMemo' ))).DisplayFormat.FormatStr := '### ### ##0.00 HUF';
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'SumVATGrossMemo' ))).DisplayFormat.FormatStr := cMoneyPicture;
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'SumVATGrossHUFMemo' ))).DisplayFormat.FormatStr := '### ### ##0.00 HUF';
+
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'MSumVATNETMemo' ))).Text := FormatFloat( cMoneyPicture, InvHeader.nInvoiceNETAmount );
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'MSumVATNETHUFMemo' ))).Text := FormatFloat( '### ### ##0.00 HUF', InvHeader.nInvoiceNETAmount );
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'MSumVATVATMemo' ))).Text := FormatFloat( cMoneyPicture, InvHeader.nInvoiceVATAmount );
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'MSumVATVATHUFMemo' ))).Text := FormatFloat( '### ### ##0.00 HUF', InvHeader.nInvoiceVATAmountHUF );
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'MSumVATGrossMemo' ))).Text := FormatFloat( cMoneyPicture, InvHeader.nInvoiceGrossAmount );
+		TfrxMemoView( TfrxMasterData( MainForm.InvoiceReport.FindObject( 'MSumVATGrossHUFMemo' ))).Text := FormatFloat( '### ### ##0.00 HUF', InvHeader.nInvoiceGrossAmount );
+
+		MainForm.PDFInvoice.DefaultPath := MainForm.cAppPath + '\pdf\';
+		MainForm.PDFInvoice.FileName := cPDFName;
+		try
+			MainForm.InvoiceReport.PrepareReport( TRUE );
+			MainForm.InvoiceReport.Export( MainForm.PDFInvoice );
+		except
+			on E:Exception do begin
+			end;
+		end;
+		MainForm.InvLineTable.Active := FALSE;
+	end;
+end;
+
+function MakeInvoiceData( InNAVInvoice : TNAVInvoice ) : string;
+var
+	cXMLFile									: string;
+	cDate										: string;
+	XMLFile									: IXMLDocument;
+	MainNode,Level1Node,Level2Node	: IXMLNode;
+begin
+	NAV.SetMySettings;
+	MakeQueryInvoiceXML( InNAVInvoice, id_Outbound );
+	WriteLogFile( 'XML file küldése indul (' + InNAVInvoice.RequestID + '.xml)',3 );
+	cXMLFile := InNAVInvoice.RequestId + '.xml';
+	cXMLFile := SendXML( cXMLFile, InNAVInvoice.TestMode, nQInvoiceData );
+	if cXMLFile <> '' then begin
+		WriteLogFile( 'A számla adatai lekérdezve.',1 );
+		XMLFile := LoadXMLDocument( MainForm.AppSettings.cReceivePath + '\' + cXMLFile );
+		MainNode := XMLFile.ChildNodes.FindNode( 'QueryInvoiceDataResponse','' );
+		if ( MainNode <> NIL ) then begin
+			Level1Node := MainNode.ChildNodes.FindNode( 'header','' );
+			if InNAVInvoice.RequestId = ReadNodeText( Level1Node,'requestId' ) then begin
+				Level1Node := MainNode.ChildNodes.FindNode( 'result','' );
+				if ReadNodeText( Level1Node, 'funcCode' ) = 'OK' then begin
+					Level1Node := MainNode.ChildNodes.FindNode( 'invoiceDataResult','' );
+					if Level1Node <> NIL then begin
+						Result := ReadNodeText( Level1Node, 'invoiceData' );
+						Level2Node := Level1Node.ChildNodes.FindNode( 'auditData','' );
+						if Level2Node <> NIL then begin
+							cDate := ReadNodeText( Level2Node, 'insdate' );
+							InvHeader.cInsUser := ReadNodeText( Level2Node, 'insCusUser' );
+							InvHeader.cTransactionID := ReadNodeText( Level2Node, 'transactionId' );
+							InvHeader.dInsDate := StrToDateTime( Copy( cDate,1,10 ) + ' ' + Copy( cDate,12,8 ), NAV.MySettings );
+							if ( InNAVInvoice.TransactionID = InvHeader.cTransactionID ) then begin
+								InNAVInvoice.TransactionID := InvHeader.cTransactionID;
+								SetNAVStatus( InNAVInvoice );
+								MAinForm.GetInvoiceStatus( InNAVInvoice );
+							end;
+						end;
+					end else begin
+						WriteLogFile( 'Nincs adat a megadott számláról. (' + InNAVInvoice.InvoiceNumber + ')',1 );
+					end;
+				end else begin
+					WriteLogFile( 'Hiba a számla adatainak lekérdezésekor!!!',1 );
+					WriteLogFile( 'A lekérdezés eredménye nem OK (' + Level1Node.Text + ')',3 );
+				end;
+			end else begin
+				WriteLogFile( 'Hiba a számla adatainak lekérdezésekor!!!',1 );
+				WriteLogFile( 'A válasz XML-ben nem egyező REQUESTID (' + cXMLFile + ')',3 );
+			end;
+		end else begin
+			WriteLogFile( 'Hiba a számla állapotának lekérdezésekor', 1 );
+			SendErrorMail( InNAVInvoice, '' );
+		end;
+	end else begin
+		WriteLogFile( 'Hiba a számla állapotának lekérdezésekor', 1 );
+		SendErrorMail( InNAVInvoice, '' );
+	end;
+end;
+
+end.

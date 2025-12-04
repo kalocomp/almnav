@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<QueryTransactionStatusRequest xmlns:common="http://schemas.nav.gov.hu/NTCA/1.0/common" xmlns="http://schemas.nav.gov.hu/OSA/3.0/api">
+	<common:header>
+		<common:requestId>Q11024604203000520251203130409</common:requestId>
+		<common:timestamp>2025-12-03T12:04:09.471Z</common:timestamp>
+		<common:requestVersion>3.0</common:requestVersion>
+		<common:headerVersion>1.0</common:headerVersion>
+	</common:header>
+	<common:user>
+		<common:login>gxtv8h0f9kdgygt</common:login>
+		<common:passwordHash cryptoType="SHA-512">DFF055D58A33949BA96B325CFB90F679A58C2A46D9A0D10081DEFBDAE876D022CEA2E83C6E5B733E0D723D94A0F6128A231241632DE995F71489323C94B8FE39</common:passwordHash>
+		<common:taxNumber>11024604</common:taxNumber>
+		<common:requestSignature cryptoType="SHA3-512">3AA23C92059BC0CF5FC9892A14B00A88B4959BDCB2DC08F39F26D309136F3D722C9BAC61B97193BB2370962FC56A89B7BFD0B4A690BCC5439F759210B4C7AF66</common:requestSignature>
+	</common:user>
+	<software>
+		<softwareId>HU11036423ALMIRA10</softwareId>
+		<softwareName>ALMIRA</softwareName>
+		<softwareOperation>LOCAL_SOFTWARE</softwareOperation>
+		<softwareMainVersion>1.0</softwareMainVersion>
+		<softwareDevName>KalocompKft.</softwareDevName>
+		<softwareDevContact>kalocomp@kalocomp.hu</softwareDevContact>
+		<softwareDevCountryCode>HU</softwareDevCountryCode>
+		<softwareDevTaxNumber>11036423-2-03</softwareDevTaxNumber>
+	</software>
+	<transactionId>57BOS4YAQ3YQRFII</transactionId>
+	<returnOriginalRequest>true</returnOriginalRequest>
+</QueryTransactionStatusRequest>

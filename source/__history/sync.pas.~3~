@@ -1,0 +1,1258 @@
+unit sync;
+
+interface
+
+uses
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, AdvUtil, Vcl.StdCtrls,
+  GradientLabel, Vcl.Grids, AdvObj, BaseGrid, AdvGrid, syncsetting, Data.DB,
+  Vcl.DBGrids;
+
+type
+  TSyncForm = class(TForm)
+		SyncGrid: TAdvStringGrid;
+		GradientLabel1: TGradientLabel;
+	 StartButton: TButton;
+    NAVButton: TButton;
+    DBGrid1: TDBGrid;
+    Button2: TButton;
+    NAVSource: TDataSource;
+		procedure FormShow(Sender: TObject);
+	 procedure StartButtonClick(Sender: TObject);
+    procedure SyncGridCheckBoxClick(Sender: TObject; ACol, ARow: Integer;
+      State: Boolean);
+    procedure SyncGridGetAlignment(Sender: TObject; ARow, ACol: Integer;
+      var HAlign: TAlignment; var VAlign: TVAlignment);
+    procedure NAVButtonClick(Sender: TObject);
+    procedure Button2Click(Sender: TObject);
+	private
+{ Private declarations }
+		cSQL : string;
+		function MySQLSelect( cInSQL : string ) : boolean;
+		function MySQLCommand( cInSQL : string ) : boolean;
+	public
+{ Public declarations }
+		procedure Syncing;
+		procedure SyncingItem( InSyncItem : TSyncItem );
+		procedure UploadLinzer( InSyncItem : TSyncItem );
+		procedure DownloadLinzer( InSyncItem : TSyncItem );
+	end;
+
+var
+	SyncForm: TSyncForm;
+
+implementation
+
+uses nav, main, xmlhandler, kontir, System.StrUtils, System.DateUtils;
+
+{$R *.dfm}
+
+procedure TSyncForm.FormShow(Sender: TObject);
+var
+	I												: integer;
+begin
+	SetMySettings;
+	if ( MainForm.SyncSettings.SyncItems.Count = 0 ) then begin
+		MessageDlg( 'Nincs sznkronizálandó adat beállítva !!!', mtWarning, [ mbOK ], 0);
+	end else begin
+		SyncGrid.FixedCols := 0;
+		SyncGrid.ColCount := 4;
+		SyncGrid.ColWidths[ 0 ] := SyncGrid.Width div 8;
+		SyncGrid.ColWidths[ 1 ] := SyncGrid.Width div 3;
+		SyncGrid.ColWidths[ 2 ] := SyncGrid.Width div 5;
+		SyncGrid.ColWidths[ 3 ] := SyncGrid.Width div 6;
+		SyncGrid.RowCount := MainForm.SyncSettings.SyncItems.Count + 1;
+		SyncGrid.FixedRows := 1;
+//		SyncGrid.ShowSelection := FALSE;
+		SyncGrid.Cells[ 0,0 ] := 'Actív';
+		SyncGrid.Cells[ 1,0 ] := 'Megnevezés';
+		SyncGrid.Cells[ 2,0 ] := 'Utolsó aktivitás';
+		SyncGrid.Cells[ 3,0 ] := 'Könyvelési év';
+		for I := 0 to MainForm.SyncSettings.SyncItems.Count - 1 do begin
+			SyncGrid.AddCheckBox( 0, I + 1, ( MainForm.SyncSettings.SyncItems[ I ].Active ), FALSE );
+			SyncGrid.Cells[ 1,I + 1 ] := MainForm.SyncSettings.SyncItems.Items[ I ].Name;
+			SyncGrid.Cells[ 2,I + 1 ] := FormatDateTime( 'YYYY.MM.DD hh:mm', MainForm.SyncSettings.LastRead );
+			SyncGrid.Cells[ 3,I + 1 ] := IntToStr( MainForm.SyncSettings.SyncItems.Items[ I ].ActYear );
+		end;
+		MainForm.DBFTable1.Close;
+	end;
+end;
+
+procedure TSyncForm.StartButtonClick(Sender: TObject);
+begin
+	if ( MainForm.SyncSettings.SyncItems.Count > 0 ) then begin
+		SyncingItem( MainForm.SyncSettings.SyncItems.Items[ SyncForm.SyncGrid.Selection.Top - 1 ]);
+	end;
+end;
+
+function TSyncForm.MySQLSelect( cInSQL : string ) : boolean;
+begin
+	Result := TRUE;
+	if Length( cInSQL ) > 0 then begin
+		WriteLogFile( 'SQL Select : ' + cInSQL, 4 );
+		if MainForm.SyncTransaction.InTransaction then begin
+			MainForm.SyncTransaction.CommitRetaining;
+		end;
+		Result := TRUE;
+		MainForm.SyncQuery.Transaction := MainForm.SyncTransaction;
+		MainForm.SyncQuery.Close;
+		MainForm.SyncQuery.SQL.Clear;
+		MainForm.SyncQuery.SQL.Add( cInSQL );
+		try
+			MainForm.SyncQuery.Open;
+			MainForm.SyncTransaction.CommitRetaining;
+		except
+			on E : Exception do begin
+				WriteLogFile( 'A kovetkezõ parancs nem hajtható végre :' + cInSQL, 4 );
+				WriteLogFile( 'SQL hiba : ' + E.Message, 2 );
+				Result := FALSE;
+			end;
+		end;
+	end;
+end;
+
+function TSyncForm.MySQLCommand( cInSQL : string ) : boolean;
+var
+	nPos					: integer;
+begin
+	WriteLogFile( 'SQL Command : ' + cInSQL, 4 );
+	Result := TRUE;
+	if MainForm.SyncQuery.Active then begin
+		MainForm.SyncQuery.Close;
+	end;
+	if MainForm.SyncTransaction.InTransaction then begin
+		MainForm.SyncTransaction.Commit;
+		MainForm.SyncTransaction.Active := FALSE;
+	end;
+	MainForm.SyncTransaction.StartTransaction;
+	MainForm.SyncQuery.Transaction := MainForm.SyncTransaction;
+	MainForm.SyncQuery.SQL.Clear;
+	MainForm.SyncQuery.SQL.Add( cInSQL );
+	try
+		try
+			MainForm.SyncQuery.ExecSQL;
+		except
+			on E : Exception do begin
+				WriteLogFile( 'A kovetkezõ parancs nem hajtható végre :' + cInSQL, 4 );
+				WriteLogFile( 'SQL hiba : ' + E.Message, 2 );
+				MainForm.SyncTransaction.Rollback;
+				Result := FALSE;
+			end;
+		end;
+		MainForm.SyncTransaction.Commit;
+		MainForm.SyncTransaction.Active := FALSE;
+	finally
+		MainForm.SyncQuery.Close;
+	end;
+end;
+
+procedure TSyncForm.SyncGridCheckBoxClick(Sender: TObject; ACol, ARow: Integer;
+	State: Boolean);
+begin
+	if ( ACol = 0 ) then begin
+		MainForm.SyncSettings.SyncItems[ ARow - 1 ].Active := State;
+	end;
+end;
+
+procedure TSyncForm.SyncGridGetAlignment(Sender: TObject; ARow, ACol: Integer;
+	var HAlign: TAlignment; var VAlign: TVAlignment);
+begin
+	if ( ACol = 0 ) then begin
+		HAlign := taCenter;
+	end;
+end;
+
+procedure TSyncForm.Syncing;
+var
+	I											: integer;
+begin
+	WriteLogFile( 'Szinkronizálás megezdve.',4 );
+	for I := 0 to MainForm.SyncSettings.SyncItems.Count - 1 do begin
+		if ( MainForm.SyncSettings.SyncItems.Items[ I ].Active ) then begin
+			Self.SyncingItem( MainForm.SyncSettings.SyncItems.Items[ I ] );
+		end;
+		MainForm.SyncSettings.LastRead := Now;
+	end;
+	WriteLogFile( 'Szinkronizálás befejezve.',4 );
+end;
+
+procedure TSyncForm.SyncingItem( InSyncItem: TSyncItem );
+begin
+	if Length( InSyncItem.SQLServer ) = 0 then begin
+		MainForm.SyncDatabase.DatabaseName := InSyncItem.SQLFileName;
+	end else begin
+		if InSyncItem.SQLPort <> '' then begin
+			MainForm.SyncDatabase.DatabaseName := InSyncItem.SQLServer + '/' + InSyncItem.SQLPort + ':' + InSyncItem.SQLFileName;
+		end else begin
+			MainForm.SyncDatabase.DatabaseName := InSyncItem.SQLServer + ':' + InSyncItem.SQLFileName;
+		end;
+	end;
+	MainForm.SyncDatabase.Params.Clear;
+	MainForm.SyncDatabase.Params.Add( 'user_name=' + InSyncItem.SQLUser );
+	MainForm.SyncDatabase.Params.Add( 'password=' + InSyncItem.SQLPassword );
+	MainForm.SyncDatabase.Params.Add( 'lc_ctype=win1250' );
+	try
+		MainForm.SyncDatabase.Close;
+		MainForm.SyncDatabase.Open;
+		if ( MainForm.SyncDatabase.Connected ) then begin
+			WriteLogFile( 'Adatbázis megynyitva.' + MainForm.SyncDatabase.DatabaseName,4 );
+			case ( InSyncItem.SessionType ) of
+				st_UploadLinzer : begin
+					UploadLinzer( InSyncItem );
+				end;
+				st_DownloadLinzer : begin
+					DownloadLinzer( InSyncItem );
+				end;
+			end;
+		end;
+		MainForm.SyncTransaction.Active := FALSE;
+		MainForm.SyncDatabase.Close;
+	except
+		on E : EDatabaseError do begin
+			WriteLogFile( 'Adatbázis hibás megynyiása.' + MainForm.SyncDatabase.DatabaseName,2 );
+			MainForm.SyncTransaction.Active := FALSE;
+			MainForm.SyncDatabase.Close;
+		end;
+	end;
+end;
+
+procedure TSyncForm.UploadLinzer( InSyncItem: TSyncItem );
+var
+	cMaxSzla,cMaxBiz									: string;
+	nMaxEv												: TDateTime;
+	nAlap, nAFA											: double;
+	nSor,nEv,nPenztar,nBiz							: integer;
+begin
+	StartButton.Enabled := FALSE;
+// Árutörzs frissítése
+	WriteLogFile( 'Linzer áruk feltöltése megkezdve.',2 );
+	MainForm.DBFTable1.DatabaseName := Copy( InSyncItem.LocalYearDatabase, 1, Length( InSyncItem.LocalYearDatabase ) - 1 );
+	MainForm.DBFTable1.TableName := InSyncItem.LocalYearDatabase + 'T10.DBF';
+	try
+		MainForm.DBFTable1.Open;
+		MainForm.DBFTable1.First;
+		while ( not MainForm.DBFTable1.Eof ) do begin
+			Application.ProcessMessages;
+			WriteLogFile( 'Áru adat ellenõrzése: ' + MainForm.DBFTable1.FieldByName( 'T10KOD' ).AsString + ' (' + MainForm.DBFTable1.FieldByName( 'T10NEV' ).AsString + ')',4 );
+			cSQL := 'SELECT "aru"."kod", "aru"."nev", "aru"."szlanev", "aru"."me", "aru"."vtsz", "aru"."afakod" ' +
+				'FROM "aru" WHERE "aru"."kod" = ' + QuotedStr( MainForm.DBFTable1.FieldByName( 'T10KOD' ).AsString );
+			MySQLSelect( cSQL );
+			if ( MainForm.SyncQuery.RecordCount <> 0 ) then begin
+				if (( MainForm.DBFTable1.FieldByName( 'T10NEV' ).AsString <> MainForm.SyncQuery.FieldByName( 'NEV' ).AsString ) or
+					( MainForm.DBFTable1.FieldByName( 'T10NEV2' ).AsString <> MainForm.SyncQuery.FieldByName( 'SZLANEV' ).AsString ) or
+					( MainForm.DBFTable1.FieldByName( 'T10ME1' ).AsString <> MainForm.SyncQuery.FieldByName( 'ME' ).AsString ) or
+					( MainForm.DBFTable1.FieldByName( 'T10VTSZAM' ).AsString <> MainForm.SyncQuery.FieldByName( 'VTSZ' ).AsString ) or
+					( MainForm.DBFTable1.FieldByName( 'T10AFAKOD' ).AsString <> MainForm.SyncQuery.FieldByName( 'AFAKOD' ).AsString )) then begin
+WriteLogFile( QuotedStr( MainForm.DBFTable1.FieldByName( 'T10NEV' ).AsString ),4 );
+WriteLogFile( MainForm.DBFTable1.Fields.Fields[ 1 ].AsString, 4 );
+					cSQL := 'UPDATE "aru" SET ' +
+						'"nev" = ' + QuotedStr( MainForm.DBFTable1.FieldByName( 'T10NEV' ).AsString ) + ', ' +
+						'"szlanev" = ' + QuotedStr( MainForm.DBFTable1.FieldByName( 'T10NEV2' ).AsString ) + ', ' +
+						'"me" = ' + QuotedStr( MainForm.DBFTable1.FieldByName( 'T10ME1' ).AsString ) + ', ' +
+						'"vtsz" = ' + QuotedStr( MainForm.DBFTable1.FieldByName( 'T10VTSZAM' ).AsString ) + ', ' +
+						'"afakod" = ' + MainForm.DBFTable1.FieldByName( 'T10AFAKOD' ).AsString + ', ' +
+						'"syncdat" = CURRENT_TIMESTAMP WHERE "aru"."kod" = ' + QuotedStr( MainForm.DBFTable1.FieldByName( 'T10KOD' ).AsString );
+					MySQLCommand( cSQL );
+					WriteLogFile( 'Áru adatainak frissítése : ' + MainForm.DBFTable1.FieldByName( 'T10NEV' ).AsString + ' (' + MainForm.DBFTable1.FieldByName( 'T10KOD' ).AsString + ')',4 );
+				end;
+			end else begin
+				cSQL := 'INSERT INTO "aru" ( "kod", "nev", "szlanev", "me", "vtsz", "afakod", "syncdat" ) VALUES ( ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'T10KOD' ).AsString ) + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'T10NEV' ).AsString ) + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'T10NEV2' ).AsString ) + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'T10ME1' ).AsString ) + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'T10VTSZAM' ).AsString ) + ', ' +
+					MainForm.DBFTable1.FieldByName( 'T10AFAKOD' ).AsString + ', ' +
+					'CURRENT_TIMESTAMP )';
+				MySQLCommand( cSQL );
+				WriteLogFile( 'Áru adatainak beszúrása : ' + MainForm.DBFTable1.FieldByName( 'T10NEV' ).AsString + ' (' + MainForm.DBFTable1.FieldByName( 'T10KOD' ).AsString + ')',4 );
+			end;
+			MainForm.DBFTable1.Next;
+		end;
+		cSQL := 'UPDATE "syncdate" SET "syncdate"."lastupload" = CURRENT_TIMESTAMP WHERE "syncdate"."tablename" = ' + QuotedStr( 'aru' );
+		MySQLCommand( cSQL );
+		WriteLogFile( 'Áruk adatainak frissítése kész. ',2 );
+	except
+		on E : Exception do begin
+			WriteLogFile( 'Hiba a ' + InSyncItem.LocalYearDatabase + 'T10.DBF állomány megnyitásakor :' + E.Message,2 );
+		end;
+	end;
+	MainForm.DBFTable1.Close;
+// Partner törzs frissítése
+	WriteLogFile( 'Linzer partnerek feltöltése megkezdve.',2 );
+	MainForm.DBFTable1.DatabaseName := Copy( InSyncItem.LocalYearDatabase, 1, Length( InSyncItem.LocalYearDatabase ) - 1 );
+	MainForm.DBFTable1.TableName := InSyncItem.LocalYearDatabase + 'T20.DBF';
+	try
+		MainForm.DBFTable1.Open;
+		MainForm.DBFTable1.First;
+		while ( not MainForm.DBFTable1.Eof ) do begin
+			Application.ProcessMessages;
+			cSQL := 'SELECT * FROM "partner" WHERE "partner"."kod" = ' + MainForm.DBFTable1.FieldByName( 'T20KOD' ).AsString;
+			MySQLSelect( cSQL );
+			if ( MainForm.SyncQuery.RecordCount <> 0 ) then begin
+				if ( MainForm.DBFTable1.FieldByName( 'T20ADO' ).AsString = MainForm.SyncQuery.FieldByName( 'ADOSZAM' ).AsString ) then begin
+					if (( MainForm.DBFTable1.FieldByName( 'T20NEV' ).AsString <> MainForm.SyncQuery.FieldByName( 'NEV' ).AsString ) or
+						( MainForm.DBFTable1.FieldByName( 'T20SZLANEV' ).AsString <> MainForm.SyncQuery.FieldByName( 'SZLANEV' ).AsString ) or
+						( MainForm.DBFTable1.FieldByName( 'T20ORSZAG1' ).AsString <> MainForm.SyncQuery.FieldByName( 'ORSZAG' ).AsString ) or
+						( MainForm.DBFTable1.FieldByName( 'T20IRSZAM1' ).AsString <> MainForm.SyncQuery.FieldByName( 'IRSZAM' ).AsString ) or
+						( MainForm.DBFTable1.FieldByName( 'T20UTCA1' ).AsString <> MainForm.SyncQuery.FieldByName( 'UTCA' ).AsString ) or
+						( MainForm.DBFTable1.FieldByName( 'T20UTTIP1' ).AsString <> MainForm.SyncQuery.FieldByName( 'UTTIP' ).AsString ) or
+						( MainForm.DBFTable1.FieldByName( 'T20HAZ1' ).AsString <> MainForm.SyncQuery.FieldByName( 'HAZ' ).AsString ) or
+						( MainForm.DBFTable1.FieldByName( 'T20FIZMOD' ).AsInteger <> MainForm.SyncQuery.FieldByName( 'FIZMOD' ).AsInteger ) or
+						( MainForm.DBFTable1.FieldByName( 'T20NAPOK' ).AsInteger <> MainForm.SyncQuery.FieldByName( 'NAPOK' ).AsInteger ) or
+						( MainForm.DBFTable1.FieldByName( 'T20NAVTIP' ).AsString <> MainForm.SyncQuery.FieldByName( 'NAVTIP' ).AsString )) then begin
+						cSQL := 'UPDATE "partner" SET ' +
+							'"nev" = ' + QuotedStr( MainForm.DBFTable1.FieldByName( 'T20NEV' ).AsString ) + ', ' +
+							'"szlanev" = ' + QuotedStr( MainForm.DBFTable1.FieldByName( 'T20SZLANEV' ).AsString ) + ', ' +
+							'"orszag" = ' + QuotedStr( MainForm.DBFTable1.FieldByName( 'T20ORSZAG1' ).AsString ) + ', ' +
+							'"irszam" = ' + QuotedStr( MainForm.DBFTable1.FieldByName( 'T20IRSZAM1' ).AsString ) + ', ' +
+							'"utca" = ' + QuotedStr( MainForm.DBFTable1.FieldByName( 'T20UTCA1' ).AsString ) + ', ' +
+							'"uttip" = ' + QuotedStr( MainForm.DBFTable1.FieldByName( 'T20UTTIP1' ).AsString ) + ', ' +
+							'"haz" = ' + QuotedStr( MainForm.DBFTable1.FieldByName( 'T20HAZ1' ).AsString ) + ', ' +
+							'"fizmod" = ' + MainForm.DBFTable1.FieldByName( 'T20FIZMOD' ).AsString + ', ' +
+							'"napok" = ' + MainForm.DBFTable1.FieldByName( 'T20NAPOK' ).AsString + ', ' +
+							'"adoszam" = ' + QuotedStr( MainForm.DBFTable1.FieldByName( 'T20ADO' ).AsString ) + ', ' +
+							'"navtip" = ' + QuotedStr( MainForm.DBFTable1.FieldByName( 'T20NAVTIP' ).AsString ) + ', ' +
+							'"syncdat" = CURRENT_TIMESTAMP WHERE "partner"."kod" = ' + IntToStr( MainForm.DBFTable1.FieldByName( 'T20KOD' ).AsInteger );
+						MySQLCommand( cSQL );
+						WriteLogFile( 'Partner adatainak frissítése : ' + MainForm.DBFTable1.FieldByName( 'T20NEV' ).AsString + ' (' + IntToStr( MainForm.DBFTable1.FieldByName( 'T20KOD' ).AsInteger ) + ')',4 );
+					end;
+				end else begin
+					WriteLogFile( 'Nem eggyezõ adószám (' + MainForm.DBFTable1.FieldByName( 'T20ADO' ).AsString + ' - ' + MainForm.DBFTable1.FieldByName( 'T20NEV' ).AsString + ' - ' +
+						MainForm.SyncQuery.FieldByName( 'ADOSZAM' ).AsString + ' - ' + MainForm.SyncQuery.FieldByName( 'NEV' ).AsString + ')',2 );
+				end;
+			end else begin
+				cSQL := 'INSERT INTO "partner" ( "kod", "nev", "szlanev", "orszag", "irszam", "utca", "uttip", "haz", "fizmod", "napok", "adoszam", "navtip", "syncdat" ) VALUES ( ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'T20KOD' ).AsString ) + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'T20NEV' ).AsString ) + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'T20SZLANEV' ).AsString ) + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'T20ORSZAG1' ).AsString ) + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'T20IRSZAM1' ).AsString ) + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'T20UTCA1' ).AsString ) + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'T20UTTIP1' ).AsString ) + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'T20HAZ1' ).AsString ) + ', ' +
+					MainForm.DBFTable1.FieldByName( 'T20FIZMOD' ).AsString + ', ' +
+					MainForm.DBFTable1.FieldByName( 'T20NAPOK' ).AsString + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'T20ADO' ).AsString ) + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'T20NAVTIP' ).AsString ) + ', ' +
+					'CURRENT_TIMESTAMP )';
+				MySQLCommand( cSQL );
+				WriteLogFile( 'Partner adatainak beszúrása : ' + MainForm.DBFTable1.FieldByName( 'T20NEV' ).AsString + ' (' + IntToStr( MainForm.DBFTable1.FieldByName( 'T20KOD' ).AsInteger ) + ')',4 );
+			end;
+			MainForm.DBFTable1.Next;
+		end;
+		cSQL := 'UPDATE "syncdate" SET "syncdate"."lastupload" = CURRENT_TIMESTAMP WHERE "syncdate"."tablename" = ' + QuotedStr( 'partner' );
+		MySQLCommand( cSQL );
+		WriteLogFile( 'Partnerek adatainak frissítése kész. ',2 );
+	except
+		on E : Exception do begin
+			WriteLogFile( 'Hiba a ' + InSyncItem.LocalYearDatabase + 'T20.DBF állomány megnyitásakor :' + E.Message,2 );
+		end;
+	end;
+	MainForm.DBFTable1.Close;
+// Számlák
+	WriteLogFile( 'Linzer számlák feltöltése megkezdve.',2 );
+	cSQL := 'SELECT MAX( "szlafej"."szlaszam" ) AS MAXSZLA FROM "szlafej" WHERE "szlafej"."ev" = ' + IntToStr( InSyncItem.ActYear );
+	MySQLSelect( cSQL );
+	cMaxSzla := MainForm.SyncQuery.FieldByName( 'MAXSZLA' ).AsString;
+	WriteLogFile( 'Legutolsó számlaszám (fej): ' + cMaxSzla,4 );
+	MainForm.DBFTable1.DatabaseName := Copy( InSyncItem.LocalYearDatabase, 1, Length( InSyncItem.LocalYearDatabase ) - 1 );
+	MainForm.DBFTable1.TableName := InSyncItem.LocalYearDatabase + 'F13.DBF';
+	MainForm.DBFTable1.Exclusive := FALSE;
+	MainForm.DBFTable2.DatabaseName := Copy( InSyncItem.LocalYearDatabase, 1, Length( InSyncItem.LocalYearDatabase ) - 1 );
+	MainForm.DBFTable2.TableName := InSyncItem.LocalYearDatabase + 'F30.DBF';
+	MainForm.DBFTable2.Exclusive := FALSE;
+	try
+		MainForm.DBFTable1.Active := TRUE;
+		MainForm.DBFTable1.CloseIndexes;
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalYearDatabase + 'F131.NTX' );
+		MainForm.DBFTable2.Active := TRUE;
+		MainForm.DBFTable2.CloseIndexes;
+		MainForm.DBFTable2.IndexOpen( InSyncItem.LocalYearDatabase + 'F301.NTX' );
+		WriteLogFile( 'Linzer számla fejrészek feltöltése megkezdve.',4 );
+		MainForm.DBFTable1.OEMTranslate := FALSE;
+		MainForm.AlmiraEnv.SetSoftSeek( TRUE );
+		MainForm.DBFTable1.Seek( cMaxSzla );
+		MainForm.DBFTable1.OEMTranslate := TRUE;
+		while ( not MainForm.DBFTable1.Eof ) do begin
+			Application.ProcessMessages;
+			if ( cMaxSzla < MainForm.DBFTable1.FieldByName( 'F13SZLA' ).AsString ) then begin
+				nAlap := 0;
+				nAFA := 0;
+				nSor := 0;
+				MainForm.DBFTable2.OEMTranslate := FALSE;
+				MainForm.AlmiraEnv.SetSoftSeek( TRUE );
+				MainForm.DBFTable2.Seek( MainForm.DBFTable1.FieldByName( 'F13SZLA' ).AsString );
+				MainForm.DBFTable2.OEMTranslate := TRUE;
+				while (( not MainForm.DBFTable2.Eof ) and ( MainForm.DBFTable1.FieldByName( 'F13SZLA' ).AsString = MainForm.DBFTable2.FieldByName( 'F30SZLA' ).AsString )) do begin
+					Application.ProcessMessages;
+					cSQL := 'INSERT INTO "szlasor" ( "ev", "szlaszam", "sor", "asz", "afakod", "menny", "egysar", "netto", "eng", "afa", "brutto", "megj" ) VALUES ( ' +
+						IntToStr( InSyncItem.ActYear ) + ', ' +
+						QuotedStr( MainForm.DBFTable2.FieldByName( 'F30SZLA' ).AsString ) + ', ' +
+						MainForm.DBFTable2.FieldByName( 'F30SOR' ).AsString + ', ' +
+						QuotedStr( MainForm.DBFTable2.FieldByName( 'F30ARUKOD' ).AsString ) + ', ' +
+						MainForm.DBFTable2.FieldByName( 'F30AFAKOD' ).AsString + ', ' +
+						GetSQLNumN( MainForm.DBFTable2.FieldByName( 'F30MENNY1' ).AsFloat ) + ', ' +
+						GetSQLNumN( MainForm.DBFTable2.FieldByName( 'F30DEVAR' ).AsFloat ) + ', ' +
+						GetSQLNumN( MainForm.DBFTable2.FieldByName( 'F30DEVNET' ).AsFloat ) + ', ' +
+						GetSQLNumN( MainForm.DBFTable2.FieldByName( 'F30DEVENG' ).AsFloat ) + ', ' +
+						GetSQLNumN( MainForm.DBFTable2.FieldByName( 'F30DEVAFA' ).AsFloat ) + ', ' +
+						GetSQLNumN( MainForm.DBFTable2.FieldByName( 'F30DEVBRUT' ).AsFloat ) + ', ' +
+						QuotedStr( MainForm.DBFTable2.FieldByName( 'F30MEGJ' ).AsString ) + ' )';
+					MySQLCommand( cSQL );
+					nAlap := nAlap + MainForm.DBFTable2.FieldByName( 'F30DEVNET' ).AsFloat;
+					nAFA := nAFA + MainForm.DBFTable2.FieldByName( 'F30DEVAFA' ).AsFloat;
+					if ( nSor < MainForm.DBFTable2.FieldByName( 'F30SOR' ).AsInteger ) then nSor := MainForm.DBFTable2.FieldByName( 'F30SOR' ).AsInteger;
+					WriteLogFile( 'Számla sor beszúrása : ' + MainForm.DBFTable2.FieldByName( 'F30SZLA' ).AsString,2 );
+					MainForm.DBFTable2.Next;
+				end;
+				cSQL := 'INSERT INTO "szlafej" ( "ev", "szlaszam", "pkod", "telj", "kelt", "hatarido", "fizmod", "megj1", "megj2", "sor", "devnetto", "devafa", "netto", "afa", "eredszla", "upsyncdat" ) VALUES ( ' +
+					IntToStr( InSyncItem.ActYear ) + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'F13SZLA' ).AsString ) + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'F13PKOD' ).AsString ) + ', ' +
+					QuotedStr( GetSQLDateS( MainForm.DBFTable1.FieldByName( 'F13DATUM1' ).AsDateTime )) + ', ' +
+					QuotedStr( GetSQLDateS( MainForm.DBFTable1.FieldByName( 'F13DATUM2' ).AsDateTime )) + ', ' +
+					QuotedStr( GetSQLDateS( MainForm.DBFTable1.FieldByName( 'F13DATUM3' ).AsDateTime )) + ', ' +
+					MainForm.DBFTable1.FieldByName( 'F13FIZMOD' ).AsString + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'F13MEGJ1' ).AsString ) + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'F13MEGJ2' ).AsString ) + ', ' +
+					IntToStr( nSor ) + ', ' +
+					GetSQLNumN( nAlap ) + ', ' +
+					GetSQLNumN( nAFA ) + ', ' +
+					GetSQLNumN( nAlap ) + ', ' +
+					GetSQLNumN( nAFA ) + ', ' +
+					QuotedStr( MainForm.DBFTable1.FieldByName( 'F13EREDSZ' ).AsString ) + ', ' +
+					'CURRENT_TIMESTAMP )';
+				MySQLCommand( cSQL );
+				WriteLogFile( 'Számla fej beszúrása : ' + MainForm.DBFTable1.FieldByName( 'F13SZLA' ).AsString,2 );
+				if ( MainForm.DBFTable1.FieldByName( 'F13DEVBRUT' ).AsFloat <> nAlap + nAFA ) then begin
+					WriteLogFile( 'Hibás számlaösszeg : ' + MainForm.DBFTable1.FieldByName( 'F13SZLA' ).AsString + ' (' +
+						FormatFloat( '0.00', MainForm.DBFTable1.FieldByName( 'F13DEVBRUT' ).AsFloat ) + ' - ' + FormatFloat( '0.00', nAlap + nAFA ) + ')', 4 );
+				end;
+			end;
+			MainForm.DBFTable1.Next;
+		end;
+		cSQL := 'UPDATE "syncdate" SET "syncdate"."lastupload" = CURRENT_TIMESTAMP WHERE "syncdate"."tablename" = ' + QuotedStr( 'szamla' );
+		MySQLCommand( cSQL );
+		WriteLogFile( 'Számlák feltöltése kész. ',2 );
+	except
+		on E : Exception do begin
+			WriteLogFile( 'Hiba a ' + InSyncItem.LocalYearDatabase + 'F13.DBF vagy F30.DBF állomány megnyitásakor :' + E.Message,2 );
+		end;
+	end;
+	MainForm.DBFTable1.Close;
+	MainForm.DBFTable2.Close;
+// Pénztárbizonylat feltöltés
+	WriteLogFile( 'Linzer pénztárbizonylatok feltöltése megkezdve.',4 );
+	cSQL := 'SELECT MAX( "penztarbizonylat"."kulcs" ) AS MAXBIZ FROM "penztarbizonylat"';
+	MySQLSelect( cSQL );
+	nEv := InSyncItem.ActYear;
+	nPenztar := 1;
+	nBiz := 0;
+	cMaxBiz := MainForm.SyncQuery.FieldByName( 'MAXBIZ' ).AsString;
+	if ( cMaxBiz <> '' ) then begin
+		nEv := StrToInt( Copy( cMaxBiz,1,4 ));
+		nPenztar := StrToInt( Copy( cMaxBiz,5,2 ));
+		nBiz := StrToInt( Copy( cMaxBiz,7,7 ));
+	end;
+	WriteLogFile( 'Legutolsó bizonylatszám (fej): ' + cMaxBiz,4 );
+	MainForm.DBFTable1.DatabaseName := Copy( InSyncItem.LocalYearDatabase, 1, Length( InSyncItem.LocalYearDatabase ) - 1 );
+	MainForm.DBFTable1.TableName := InSyncItem.LocalYearDatabase + 'F31.DBF';
+	MainForm.DBFTable1.Exclusive := FALSE;
+	MainForm.DBFTable2.DatabaseName := Copy( InSyncItem.LocalYearDatabase, 1, Length( InSyncItem.LocalYearDatabase ) - 1 );
+	MainForm.DBFTable2.TableName := InSyncItem.LocalYearDatabase + 'F32.DBF';
+	MainForm.DBFTable2.Exclusive := FALSE;
+	try
+		WriteLogFile( 'Linzer pénztárbizonylatok feltöltése megkezdve.',4 );
+		MainForm.DBFTable1.Active := TRUE;
+		MainForm.DBFTable1.CloseIndexes;
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalYearDatabase + 'F311.NTX' );
+		MainForm.DBFTable2.Active := TRUE;
+		MainForm.DBFTable2.CloseIndexes;
+		MainForm.DBFTable2.IndexOpen( InSyncItem.LocalYearDatabase + 'F321.NTX' );
+		MainForm.DBFTable1.OEMTranslate := FALSE;
+		MainForm.AlmiraEnv.SetSoftSeek( TRUE );
+		MainForm.DBFTable1.Seek( IntToStr( nEv ) + PadL( IntToStr( nPenztar ),2,' ' ) + PadL( IntToStr( nBiz ),7,' ' ));
+		MainForm.DBFTable1.OEMTranslate := TRUE;
+		while ( not MainForm.DBFTable1.Eof ) do begin
+			Application.ProcessMessages;
+			if ( nBiz < MainForm.DBFTable1.FieldByName( 'F31BIZSZAM' ).AsInteger ) then begin
+				MainForm.Refresh;
+				Application.ProcessMessages;
+				nAlap := 0;
+				nSor := 0;
+				MainForm.DBFTable2.OEMTranslate := FALSE;
+				MainForm.AlmiraEnv.SetSoftSeek( TRUE );
+				MainForm.DBFTable2.Seek( MainForm.DBFTable1.FieldByName( 'F31EV' ).AsString + PadL( MainForm.DBFTable1.FieldByName( 'F31PENZTAR' ).AsString,2,' ' ) +
+					PadL( MainForm.DBFTable1.FieldByName( 'F31BIZSZAM' ).AsString,7,' ' ));
+				MainForm.DBFTable2.OEMTranslate := TRUE;
+				while (( not MainForm.DBFTable2.Eof ) and
+					( MainForm.DBFTable1.FieldByName( 'F31EV' ).AsInteger = MainForm.DBFTable2.FieldByName( 'F32EV' ).AsInteger ) and
+					( MainForm.DBFTable1.FieldByName( 'F31PENZTAR' ).AsInteger = MainForm.DBFTable2.FieldByName( 'F32PENZTAR' ).AsInteger ) and
+					( MainForm.DBFTable1.FieldByName( 'F31BIZSZAM' ).AsInteger = MainForm.DBFTable2.FieldByName( 'F32BIZSZAM' ).AsInteger )) do begin
+		 			Application.ProcessMessages;
+					cSQL := 'INSERT INTO "penztarbizonylat" ( "kulcs", "szlaszam", "kelt", "arfolyam", "fj", "pkod", "devforg", "forgalom", "megj", "arfkul", "syncdat" ) VALUES ( ' +
+						QuotedStr( MainForm.DBFTable2.FieldByName( 'F32EV' ).AsString +
+						PadL( MainForm.DBFTable2.FieldByName( 'F32PENZTAR' ).AsString,2,' ' ) +
+						PadL( MainForm.DBFTable2.FieldByName( 'F32BIZSZAM' ).AsString,7,'0' ) +
+						PadL( MainForm.DBFTable2.FieldByName( 'F32SOR' ).AsString,3,' ' )) + ', ' +
+						QuotedStr( MainForm.DBFTable2.FieldByName( 'F32SZLA' ).AsString ) + ', ' +
+						QuotedStr( GetSQLDateS( MainForm.DBFTable1.FieldByName( 'F31KELT' ).AsDateTime )) + ', ' +
+						GetSQLNumN( MainForm.DBFTable1.FieldByName( 'F31ARF' ).AsFloat ) + ', ' +
+						QuotedStr( MainForm.DBFTable1.FieldByName( 'F31FJ' ).AsString ) + ', ' +
+						QuotedStr( MainForm.DBFTable2.FieldByName( 'F32PKOD' ).AsString ) + ', ' +
+						GetSQLNumN( MainForm.DBFTable2.FieldByName( 'F32DEVFORG' ).AsFloat ) + ', ' +
+						GetSQLNumN( MainForm.DBFTable2.FieldByName( 'F32FORG' ).AsFloat ) + ', ' +
+						QuotedStr( LeftStr( Trim( MainForm.DBFTable2.FieldByName( 'F32KSOR' ).AsString ) + Trim( MainForm.DBFTable2.FieldByName( 'F32MEGJ' ).AsString ),30 )) + ', 0, ' +
+						'CURRENT_TIMESTAMP )';
+					MySQLCommand( cSQL );
+					nAlap := nAlap + MainForm.DBFTable2.FieldByName( 'F32DEVFORG' ).AsFloat;
+					if ( nSor < MainForm.DBFTable2.FieldByName( 'F32SOR' ).AsInteger ) then nSor := MainForm.DBFTable2.FieldByName( 'F32SOR' ).AsInteger;
+					WriteLogFile( 'Pénztárbizonylat sor beszúrása : ' + MainForm.DBFTable2.FieldByName( 'F32BIZSZAM' ).AsString,2 );
+					MainForm.DBFTable2.Next;
+				end;
+				if ( MainForm.DBFTable1.FieldByName( 'F31DEVFORG' ).AsFloat <> nAlap ) then begin
+					WriteLogFile( 'Hibás bizonylatösszeg : ' + MainForm.DBFTable1.FieldByName( 'F31BIZSZAM' ).AsString + ' (' +
+						FormatFloat( '0.00', MainForm.DBFTable1.FieldByName( 'F31DEVFORG' ).AsFloat ) + ' - ' + FormatFloat( '0.00', nAlap ) + ')', 4 );
+				end;
+			end;
+			MainForm.DBFTable1.Next;
+		end;
+		cSQL := 'UPDATE "syncdate" SET "syncdate"."lastupload" = CURRENT_TIMESTAMP WHERE "syncdate"."tablename" = ' + QuotedStr( 'penztarbizonylat' );
+		MySQLCommand( cSQL );
+		WriteLogFile( 'Pénztárbizonylatok frissítése kész. ',2 );
+	except
+		on E : Exception do begin
+			WriteLogFile( 'Hiba a ' + InSyncItem.LocalYearDatabase + 'F31.DBF vagy F32.DBF állomány megnyitásakor :' + E.Message,2 );
+		end;
+	end;
+	MainForm.DBFTable1.Close;
+	MainForm.DBFTable2.Close;
+	StartButton.Enabled := TRUE;
+end;
+
+procedure TSyncForm.NAVButtonClick(Sender: TObject);
+begin
+	MainForm.DBFTable1.DatabaseName := MainForm.cAppPath;
+	MainForm.DBFTable1.TableName := ExtractFileName( MainForm.NAVASzSettings.cDBFPath );
+	try
+		MainForm.DBFTable1.OEMTranslate := TRUE;
+		MainForm.DBFTable1.Open;
+	except
+		on E : Exception do begin
+			WriteLogFile( 'Hiba a NAV.DBF állomány megnyitásakor :' + E.Message,2 );
+		end;
+	end;
+
+end;
+
+procedure TSyncForm.Button2Click(Sender: TObject);
+var
+	InSyncItem : TSyncItem;
+begin
+	InSyncItem := MainForm.SyncSettings.SyncItems.Items[ 1 ];
+	if Length( InSyncItem.SQLServer ) = 0 then begin
+		MainForm.SyncDatabase.DatabaseName := InSyncItem.SQLFileName;
+	end else begin
+		if InSyncItem.SQLPort <> '' then begin
+			MainForm.SyncDatabase.DatabaseName := InSyncItem.SQLServer + '/' + InSyncItem.SQLPort + ':' + InSyncItem.SQLFileName;
+		end else begin
+			MainForm.SyncDatabase.DatabaseName := InSyncItem.SQLServer + ':' + InSyncItem.SQLFileName;
+		end;
+	end;
+	MainForm.SyncDatabase.Params.Clear;
+	MainForm.SyncDatabase.Params.Add( 'user_name=' + InSyncItem.SQLUser );
+	MainForm.SyncDatabase.Params.Add( 'password=' + InSyncItem.SQLPassword );
+	MainForm.SyncDatabase.Params.Add( 'lc_ctype=win1250' );
+	try
+		MainForm.SyncDatabase.Close;
+		MainForm.SyncDatabase.Open;
+		if ( MainForm.SyncDatabase.Connected ) then begin
+			WriteLogFile( 'Adatbázis megynyitva.' + MainForm.SyncDatabase.DatabaseName,4 );
+		end;
+		MainForm.SyncTransaction.Active := FALSE;
+		MainForm.SyncDatabase.Close;
+	except
+		on E : EDatabaseError do begin
+			WriteLogFile( 'Adatbázis hibás megynyiása.' + MainForm.SyncDatabase.DatabaseName,2 );
+			MainForm.SyncTransaction.Active := FALSE;
+			MainForm.SyncDatabase.Close;
+		end;
+	end;
+end;
+
+procedure TSyncForm.DownloadLinzer( InSyncItem: TSyncItem );
+var
+	nItem,nCsoport,nMaxSzla									: integer;
+	cLastBiz,cNewKey												: string;
+	cFKSz1,cFKSz2,cKTNem1,cKTNem2						: string;
+	nRJ1,nRJ2																: integer;
+	nSumAlap,nSumAFA,nLastAlap,nLastAFA			: single;
+	lWriteBiz																: boolean;
+	dUploadDate,dKonyvDat										: TDateTime;
+	BizKontir																: TBizKontir;
+begin
+	BizKontir := TBizKontir.Create;
+	StartButton.Enabled := FALSE;
+// Árutörzs frissítése
+	WriteLogFile( 'Linzer áruk letöltése megkezdve.',2 );
+	MainForm.DBFTable1.DatabaseName := Copy( InSyncItem.LocalYearDatabase, 1, Length( InSyncItem.LocalYearDatabase ) - 1 );
+	MainForm.DBFTable1.TableName := InSyncItem.LocalYearDatabase + 'A10.DBF';
+	try
+		MainForm.DBFTable1.Active := TRUE;
+		MainForm.DBFTable1.Exclusive := FALSE;
+		MainForm.DBFTable1.CloseIndexes;
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalYearDatabase + 'A101.NTX' );
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalYearDatabase + 'A102.NTX' );
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalYearDatabase + 'A103.NTX' );
+		MainForm.DBFTable1.SetOrder( 1 );
+	except
+		on E : Exception do begin
+			WriteLogFile( 'Hiba a ' + InSyncItem.LocalYearDatabase + 'A10.DBF állomány megnyitásakor :' + E.Message,2 );
+			Exit;
+		end;
+	end;
+	cSQL := 'SELECT * FROM "aru" WHERE "aru"."syncdat" > ' +
+		'( SELECT "syncdate"."lastdownload" FROM "syncdate" WHERE "syncdate"."tablename" = ' + QuotedStr( 'aru' ) + ')';
+	MySQLSelect( cSQL );
+	if ( MainForm.SyncQuery.RecordCount <> 0 ) then begin
+		MainForm.SyncQuery.First;
+		nItem := 0;
+		while ( not MainForm.SyncQuery.Eof ) do begin
+// Megnézzük, hogy van-e már ilyen termék
+			Application.ProcessMessages;
+			cNewKey := MainForm.SyncQuery.FieldByName( 'KOD' ).AsString;
+			MainForm.AlmiraEnv.SetSoftSeek( FALSE );
+			MainForm.DBFTable1.OEMTranslate := FALSE;
+			if ( MainForm.DBFTable1.Seek( cNewKey )) then begin
+				MainForm.DBFTable1.OEMTranslate := TRUE;
+				MainForm.DBFTable1.Edit;
+				WriteLogFile( 'Termék adatok módosítása: ' + cNewKey,4 );
+			end else begin
+				MainForm.DBFTable1.OEMTranslate := TRUE;
+				MainForm.DBFTable1.Append;
+				MainForm.DBFTable1.FieldByName( 'ASZ' ).AsString := cNewKey;
+				WriteLogFile( 'Új termék adatai : ' + cNewKey,4 );
+			end;
+			MainForm.DBFTable1.FieldByName( 'NEV' ).AsString := MainForm.SyncQuery.FieldByName( 'NEV' ).AsString;
+			MainForm.DBFTable1.FieldByName( 'SZLANEV' ).AsString := MainForm.SyncQuery.FieldByName( 'SZLANEV' ).AsString;
+			MainForm.DBFTable1.FieldByName( 'ME1' ).AsString := MainForm.SyncQuery.FieldByName( 'ME' ).AsString;
+			MainForm.DBFTable1.FieldByName( 'VTSZAM' ).AsString := MainForm.SyncQuery.FieldByName( 'VTSZ' ).AsString;
+			MainForm.DBFTable1.FieldByName( 'AFAKOD' ).AsInteger := MainForm.SyncQuery.FieldByName( 'AFAKOD' ).AsInteger;
+			MainForm.DBFTable1.Commit;
+			MainForm.SyncQuery.Next;
+			nItem := nItem + 1;
+		end;
+		WriteLogFile( IntToStr( nItem ) + ' db termék adatai frissítve.',4 );
+	end;
+	MainForm.SyncQuery.Close;
+	cSQL := 'UPDATE "syncdate" SET "syncdate"."lastdownload" = CURRENT_TIMESTAMP WHERE "syncdate"."tablename" = ' + QuotedStr( 'aru' );;
+	MySQLCommand( cSQL );
+	MainForm.DBFTable1.Close;
+// Partner törzs frissítése
+	WriteLogFile( 'Linzer partnerek letöltése megkezdve.',2 );
+	MainForm.DBFTable1.DatabaseName := Copy( InSyncItem.LocalShareDatabase, 1, Length( InSyncItem.LocalShareDatabase ) - 1 );
+	MainForm.DBFTable1.TableName := InSyncItem.LocalShareDatabase + 'P10.DBF';
+	MainForm.DBFTable2.DatabaseName := Copy( InSyncItem.LocalYearDatabase, 1, Length( InSyncItem.LocalYearDatabase ) - 1 );
+	MainForm.DBFTable2.TableName := InSyncItem.LocalYearDatabase + 'F10.DBF';
+	try
+		MainForm.DBFTable1.Active := TRUE;
+		MainForm.DBFTable1.Exclusive := FALSE;
+		MainForm.DBFTable1.CloseIndexes;
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalShareDatabase + 'P101.NTX' );
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalShareDatabase + 'P102.NTX' );
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalShareDatabase + 'P103.NTX' );
+		WriteLogFile( 'Partner törzs állomány megnyitva! (' + InSyncItem.LocalShareDatabase + 'P10.DBF)',4 );
+		MainForm.DBFTable1.SetOrder( 1 );
+		MainForm.DBFTable2.Active := TRUE;
+		MainForm.DBFTable2.Exclusive := FALSE;
+		MainForm.DBFTable2.CloseIndexes;
+		MainForm.DBFTable2.IndexOpen( InSyncItem.LocalYearDatabase + 'F101.NTX' );
+		MainForm.DBFTable2.SetOrder( 1 );
+		WriteLogFile( 'Fõkönyvi törzs állomány megnyitva! (' + InSyncItem.LocalYearDatabase + 'F10.DBF)',4 );
+	except
+		on E : Exception do begin
+			WriteLogFile( 'Hiba a ' + InSyncItem.LocalShareDatabase + 'P10.DBF állomány megnyitásakor :' + E.Message,2 );
+			Exit;
+		end;
+	end;
+	cSQL := 'SELECT * FROM "partner" WHERE "partner"."syncdat" > ' +
+		'( SELECT "syncdate"."lastdownload" FROM "syncdate" WHERE "syncdate"."tablename" = ' + QuotedStr( 'partner' ) + ')';
+	MySQLSelect( cSQL );
+	if ( MainForm.SyncQuery.RecordCount <> 0 ) then begin
+		MainForm.SyncQuery.First;
+		nItem := 0;
+		while ( not MainForm.SyncQuery.Eof ) do begin
+// Megnézzük, hogy van-e már ilyen partner
+			Application.ProcessMessages;
+			MainForm.DBFTable1.OEMTranslate := FALSE;
+			MainForm.AlmiraEnv.SetSoftSeek( FALSE );
+			cNewKey := MainForm.SyncQuery.FieldByName( 'KOD' ).AsString;
+			if ( MainForm.DBFTable1.Seek( cNewKey )) then begin
+				MainForm.DBFTable1.OEMTranslate := TRUE;
+				MainForm.DBFTable1.Edit;
+				WriteLogFile( 'Parter adatok módosítása: ' + MainForm.SyncQuery.FieldByName( 'KOD' ).AsString,4 );
+			end else begin
+				MainForm.DBFTable1.OEMTranslate := TRUE;
+				MainForm.DBFTable1.Append;
+				MainForm.DBFTable1.FieldByName( 'PKOD' ).AsString := MainForm.SyncQuery.FieldByName( 'KOD' ).AsString;
+				WriteLogFile( 'Új partner adatai : ' + MainForm.SyncQuery.FieldByName( 'KOD' ).AsString,4 );
+			end;
+			MainForm.DBFTable1.FieldByName( 'NEV' ).AsString := MainForm.SyncQuery.FieldByName( 'NEV' ).AsString;
+			MainForm.DBFTable1.FieldByName( 'SZLANEV' ).AsString := MainForm.SyncQuery.FieldByName( 'SZLANEV' ).AsString;
+			MainForm.DBFTable1.FieldByName( 'ORSZAG' ).AsString := MainForm.SyncQuery.FieldByName( 'ORSZAG' ).AsString;
+			MainForm.DBFTable1.FieldByName( 'IRSZAM' ).AsString := MainForm.SyncQuery.FieldByName( 'IRSZAM' ).AsString;
+			MainForm.DBFTable1.FieldByName( 'CIM' ).AsString := MainForm.SyncQuery.FieldByName( 'UTCA' ).AsString + ' ' +
+				MainForm.SyncQuery.FieldByName( 'UTTIP' ).AsString + ' ' +
+				MainForm.SyncQuery.FieldByName( 'HAZ' ).AsString + '.';
+			MainForm.DBFTable1.FieldByName( 'FIZMOD' ).AsInteger := MainForm.SyncQuery.FieldByName( 'FIZMOD' ).AsInteger;
+			MainForm.DBFTable1.FieldByName( 'NAPOK' ).AsInteger := MainForm.SyncQuery.FieldByName( 'NAPOK' ).AsInteger;
+			MainForm.DBFTable1.FieldByName( 'NAVTIPUS' ).AsString := MainForm.SyncQuery.FieldByName( 'NAVTIP' ).AsString;
+			MainForm.DBFTable1.FieldByName( 'ADOSZAM' ).AsString := MainForm.SyncQuery.FieldByName( 'ADOSZAM' ).AsString;
+			MainForm.DBFTable1.Commit;
+			cNewKey := '311   ' + MainForm.SyncQuery.FieldByName( 'KOD' ).AsString;
+			if ( not MainForm.DBFTable2.Seek( cNewKey )) then begin
+				MainForm.DBFTable2.OEMTranslate := TRUE;
+				MainForm.DBFTable2.Append;
+				MainForm.DBFTable2.FieldByName( 'FKSZ' ).AsString := '311   ' + MainForm.SyncQuery.FieldByName( 'KOD' ).AsString;
+				MainForm.DBFTable2.FieldByName( 'RESZ_JEL' ).AsInteger := 0;
+				MainForm.DBFTable2.FieldByName( 'FTORZS_KAR' ).AsInteger := 90;
+				MainForm.DBFTable2.FieldByName( 'FORG_JELL' ).AsString := '0';
+				MainForm.DBFTable2.FieldByName( 'MEGN1' ).AsString := 'Belföldi követelések';
+				MainForm.DBFTable2.FieldByName( 'MEGN2' ).AsString := MainForm.SyncQuery.FieldByName( 'NEV' ).AsString;
+				MainForm.DBFTable2.Commit;
+				WriteLogFile( 'Új fõkönyvi szám beszúrása: 311   -' + MainForm.SyncQuery.FieldByName( 'KOD' ).AsString,4 );
+			end;
+			MainForm.SyncQuery.Next;
+			nItem := nItem + 1;
+		end;
+		WriteLogFile( IntToStr( nItem ) + ' db partner adatai frissítve.',4 );
+	end;
+	MainForm.SyncQuery.Close;
+	cSQL := 'UPDATE "syncdate" SET "syncdate"."lastdownload" = CURRENT_TIMESTAMP WHERE "syncdate"."tablename" = ' + QuotedStr( 'partner' );;
+	MySQLCommand( cSQL );
+	MainForm.DBFTable1.Close;
+	MainForm.DBFTable2.Close;
+	nCsoport := 0;
+	nMaxSzla := 0;
+// Kontírozás állomány
+	MainForm.DBFTable5.Close;
+	MainForm.DBFTable5.DatabaseName := Copy( InSyncItem.LocalYearDatabase, 1, Length( InSyncItem.LocalYearDatabase ) - 1 );
+	MainForm.DBFTable5.TableName := InSyncItem.LocalYearDatabase + 'F15.DBF';
+	try
+		MainForm.DBFTable5.Active := TRUE;
+		MainForm.DBFTable5.Exclusive := FALSE;
+		MainForm.DBFTable5.CloseIndexes;
+		MainForm.DBFTable5.IndexOpen( InSyncItem.LocalYearDatabase + 'F151.NTX' );
+		MainForm.DBFTable5.IndexOpen( InSyncItem.LocalYearDatabase + 'F152.NTX' );
+		MainForm.DBFTable5.IndexOpen( InSyncItem.LocalYearDatabase + 'F153.NTX' );
+		MainForm.DBFTable5.IndexOpen( InSyncItem.LocalYearDatabase + 'F154.NTX' );
+		MainForm.DBFTable5.IndexOpen( InSyncItem.LocalYearDatabase + 'F155.NTX' );
+		MainForm.DBFTable5.SetOrder( 1 );
+	except
+		on E : Exception do begin
+			WriteLogFile( 'Hiba a ' + InSyncItem.LocalYearDatabase + 'F15.DBF állomány megnyitásakor :' + E.Message,2 );
+			Exit;
+		end;
+	end;
+// ÁFA kód törzs
+	WriteLogFile( 'Linzer számlák letöltése megkezdve.',2 );
+	MainForm.DBFTable3.Close;
+	MainForm.DBFTable3.DatabaseName := Copy( InSyncItem.LocalYearShareDatabase, 1, Length( InSyncItem.LocalYearShareDatabase ) - 1 );
+	MainForm.DBFTable3.TableName := InSyncItem.LocalYearShareDatabase + '\P13.DBF';
+	try
+		MainForm.DBFTable3.Active := TRUE;
+		MainForm.DBFTable3.Exclusive := FALSE;
+		MainForm.DBFTable3.IndexDefs.Clear;
+		MainForm.DBFTable3.CloseIndexes;
+		MainForm.DBFTable3.IndexOpen( InSyncItem.LocalYearShareDatabase + '\P131.NTX' );
+		MainForm.DBFTable3.SetOrder( 1 );
+	except
+		on E : Exception do begin
+			WriteLogFile( 'Hiba a ' + InSyncItem.LocalYearShareDatabase + '\P13.DBF állomány megnyitásakor :' + E.Message,2 );
+			Exit;
+		end;
+	end;
+// Anyag törzs
+	MainForm.DBFTable4.Close;
+	MainForm.DBFTable4.DatabaseName := Copy( InSyncItem.LocalYearDatabase, 1, Length( InSyncItem.LocalYearDatabase ) - 1 );
+	MainForm.DBFTable4.TableName := InSyncItem.LocalYearDatabase + 'A10.DBF';
+	try
+		MainForm.DBFTable4.Active := TRUE;
+		MainForm.DBFTable4.Exclusive := FALSE;
+		MainForm.DBFTable4.IndexDefs.Clear;
+		MainForm.DBFTable4.CloseIndexes;
+		MainForm.DBFTable4.IndexOpen( InSyncItem.LocalYearDatabase + 'A101.NTX' );
+		MainForm.DBFTable4.SetOrder( 1 );
+	except
+		on E : Exception do begin
+			WriteLogFile( 'Hiba a ' + InSyncItem.LocalYearDatabase + 'A10.DBF állomány megnyitásakor :' + E.Message,2 );
+			Exit;
+		end;
+	end;
+// Számla fejléc
+	MainForm.DBFTable1.DatabaseName := Copy( InSyncItem.LocalShareDatabase, 1, Length( InSyncItem.LocalShareDatabase ) - 1 );
+	MainForm.DBFTable1.TableName := InSyncItem.LocalShareDatabase + 'P14.DBF';
+	try
+		MainForm.DBFTable1.Active := TRUE;
+		MainForm.DBFTable1.Exclusive := FALSE;
+		MainForm.DBFTable1.CloseIndexes;
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalShareDatabase + 'P141.NTX' );
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalShareDatabase + 'P142.NTX' );
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalShareDatabase + 'P143.NTX' );
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalShareDatabase + 'P144.NTX' );
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalShareDatabase + 'P145.NTX' );
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalShareDatabase + 'P146.NTX' );
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalShareDatabase + 'P147.NTX' );
+		MainForm.DBFTable1.SetOrder( 1 );
+	except
+		on E : Exception do begin
+			WriteLogFile( 'Hiba a ' + InSyncItem.LocalShareDatabase + 'P14.DBF állomány megnyitásakor :' + E.Message,2 );
+			Exit;
+		end;
+	end;
+	MainForm.DBFTable2.DatabaseName := Copy( InSyncItem.LocalShareDatabase, 1, Length( InSyncItem.LocalShareDatabase ) - 1 );
+	MainForm.DBFTable2.TableName := InSyncItem.LocalShareDatabase + 'P15.DBF';
+	try
+		MainForm.DBFTable2.Active := TRUE;
+		MainForm.DBFTable2.Exclusive := FALSE;
+		MainForm.DBFTable2.CloseIndexes;
+		MainForm.DBFTable2.IndexOpen( InSyncItem.LocalShareDatabase + 'P151.NTX' );
+		MainForm.DBFTable2.IndexOpen( InSyncItem.LocalShareDatabase + 'P152.NTX' );
+		MainForm.DBFTable2.IndexOpen( InSyncItem.LocalShareDatabase + 'P153.NTX' );
+		MainForm.DBFTable2.IndexOpen( InSyncItem.LocalShareDatabase + 'P154.NTX' );
+		MainForm.DBFTable2.IndexOpen( InSyncItem.LocalShareDatabase + 'P155.NTX' );
+		MainForm.DBFTable2.SetOrder( 1 );
+	except
+		on E : Exception do begin
+			WriteLogFile( 'Hiba a ' + InSyncItem.LocalShareDatabase + 'P15.DBF állomány megnyitásakor :' + E.Message,2 );
+			Exit;
+		end;
+	end;
+// A legutolsó számla megkeresése
+	cSQL := 'SELECT FIRST 1 "szlafej"."szlaszam" FROM "szlafej"';
+	MySQLSelect( cSQL );
+	nCsoport := StrToInt( Copy( MainForm.SyncQuery.FieldByName( 'SZLASZAM' ).AsString,1,1 ));
+	MainForm.DBFTable1.OEMTranslate := FALSE;
+	MainForm.AlmiraEnv.SetSoftSeek( TRUE );
+	cNewKey := Trim( IntToStr( InSyncItem.ActYear )) + Trim( IntToStr( nCsoport + 1 ));
+	WriteLogFile( 'Legutolsó számla megkeresése :' + cNewKey, 4 );
+	MainForm.DBFTable1.Seek( cNewKey );
+	WriteLogFile( 'Rekordszám :' + IntToStr( MainForm.DBFTable1.RecordCount ), 4 );
+	WriteLogFile( 'Rekord :' + IntToStr( MainForm.DBFTable1.RecNo ), 4 );
+	WriteLogFile( 'Kikeresve :' + MainForm.DBFTable1.FieldByName( 'SZLASZAM' ).AsString, 4 );
+	if ( MainForm.DBFTable1.Eof ) or ( MainForm.DBFTable1.RecNo > MainForm.DBFTable1.RecordCount ) then begin
+		MainForm.DBFTable1.GoTop;
+		MainForm.DBFTable1.Skip( MainForm.DBFTable1.RecordCount - 1 );
+		cNewKey := Trim( IntToStr( nCsoport )) + '0000000';
+	end else begin
+		if ( MainForm.DBFTable1.FieldByName( 'EV' ).AsInteger > InSyncItem.ActYear ) or
+			 ( Copy( MainForm.DBFTable1.FieldByName( 'SZLASZAM' ).AsString,1,1 ) > Trim( IntToStr( nCsoport ))) then begin
+			MainForm.DBFTable1.Skip( -1 );
+		end;
+		cNewKey := MainForm.DBFTable1.FieldByName( 'SZLASZAM' ).AsString;
+		if ( MainForm.DBFTable1.FieldByName( 'EV' ).AsInteger < InSyncItem.ActYear ) then begin
+  		cNewKey := Trim( IntToStr( nCsoport )) + '0000000';
+    end;
+	end;
+	WriteLogFile( 'Legutolsó számla :' + cNewKey, 4 );
+	nMaxSzla := StrToInt( Copy( cNewKey,2,7 ));
+	WriteLogFile( 'Legutolsó számla :' + IntToStr( nMaxSzla ), 4 );
+	cSQL := 'SELECT "szlafej"."ev", "szlafej"."szlaszam", "szlafej"."pkod", "szlafej"."telj", "szlafej"."kelt", ' +
+		'"szlafej"."hatarido", "szlafej"."fizmod", "szlafej"."megj1", "szlafej"."megj2", "szlafej"."devnetto", "szlafej"."devafa", ' +
+		'"szlafej"."eredszla", "szlasor"."sor", "szlasor"."asz", ' +
+		'"szlasor"."afakod", "szlasor"."menny", "szlasor"."egysar", "szlasor"."netto", "szlasor"."eng", "szlasor"."afa", ' +
+		'"szlasor"."brutto", "szlasor"."megj" FROM "szlasor" ' +
+		'LEFT JOIN "szlafej" ON ( "szlafej"."ev" = "szlasor"."ev" AND "szlafej"."szlaszam" = "szlasor"."szlaszam" ) ' +
+		'WHERE "szlafej"."ev" = ' + IntToStr( InSyncItem.ActYear ) + ' AND ' +
+		'"szlafej"."szlaszam" > ' + QuotedStr( Trim( IntToStr( nCsoport )) + PadL( IntToStr( nMaxSzla ),7,'0' )) + ' ' +
+		' AND "szlafej"."szlaszam" < ' + QuotedStr( Trim( IntToStr( nCsoport )) + PadL( IntToStr( nMaxSzla + 10 ),7,'0' )) + ' ' +
+		'ORDER BY "ev","szlaszam","sor"';
+	MySQLSelect( cSQL );
+	if ( MainForm.SyncQuery.RecordCount <> 0 ) then begin
+		cLastBiz := '';
+		nLastAlap := 0;
+		nLastAFA := 0;
+		nSumAlap := 0;
+		nSumAFA := 0;
+		MainForm.SyncQuery.First;
+		while ( not MainForm.SyncQuery.Eof ) do begin
+			Application.ProcessMessages;
+			MainForm.Refresh;
+//			Application.ProcessMessages;
+			if ( cLastBiz <> MainForm.SyncQuery.FieldByName( 'SZLASZAM' ).AsString ) then begin
+				MainForm.DBFTable1.OEMTranslate := FALSE;
+				MainForm.AlmiraEnv.SetSoftSeek( FALSE );
+// Ha nincs még ilyen számla
+				cNewKey := MainForm.SyncQuery.FieldByName( 'EV' ).AsString + MainForm.SyncQuery.FieldByName( 'SZLASZAM' ).AsString;
+				if ( not ( MainForm.DBFTable1.Seek( cNewKey ))) then begin
+					WriteLogFile( 'Új számla beszúrása :' + cNewKey, 4 );
+//				if (( MainForm.DBFTable1.FieldByName( 'EV' ).AsInteger <> MainForm.SyncQuery.FieldByName( 'EV' ).AsInteger ) or
+//					( MainForm.DBFTable1.FieldByName( 'SZLASZAM' ).AsString <> MainForm.SyncQuery.FieldByName( 'SZLASZAM' ).AsString )) then begin
+          dKonyvDat := MainForm.SyncQuery.FieldByName( 'TELJ' ).AsDateTime;
+          if ( YearOf( dKonyvDat ) > InSyncItem.ActYear ) then begin
+            dKonyvDat := EncodeDate( InSyncItem.ActYear, 12, 31 );
+          end;
+					MainForm.DBFTable1.OEMTranslate := TRUE;
+					MainForm.DBFTable1.Append;
+					MainForm.DBFTable1.FieldByName( 'EV' ).AsInteger := MainForm.SyncQuery.FieldByName( 'EV' ).AsInteger;
+					MainForm.DBFTable1.FieldByName( 'SZLASZAM' ).AsString := MainForm.SyncQuery.FieldByName( 'SZLASZAM' ).AsString;
+					MainForm.DBFTable1.FieldByName( 'KSORSZAM' ).AsString := MainForm.SyncQuery.FieldByName( 'SZLASZAM' ).AsString;
+					MainForm.DBFTable1.FieldByName( 'TELJ' ).AsDateTime := MainForm.SyncQuery.FieldByName( 'TELJ' ).AsDateTime;
+					MainForm.DBFTable1.FieldByName( 'KELT' ).AsDateTime := MainForm.SyncQuery.FieldByName( 'KELT' ).AsDateTime;
+					MainForm.DBFTable1.FieldByName( 'KONYVDAT' ).AsDateTime := dKonyvDat;
+					MainForm.DBFTable1.FieldByName( 'HATARIDO' ).AsDateTime := MainForm.SyncQuery.FieldByName( 'HATARIDO' ).AsDateTime;
+					MainForm.DBFTable1.FieldByName( 'PKOD' ).AsString := MainForm.SyncQuery.FieldByName( 'PKOD' ).AsString;
+					MainForm.DBFTable1.FieldByName( 'FIZMOD' ).AsInteger := MainForm.SyncQuery.FieldByName( 'FIZMOD' ).AsInteger;
+					MainForm.DBFTable1.FieldByName( 'MEGJ1' ).AsString := MainForm.SyncQuery.FieldByName( 'MEGJ1' ).AsString;
+					MainForm.DBFTable1.FieldByName( 'MEGJ2' ).AsString := MainForm.SyncQuery.FieldByName( 'MEGJ2' ).AsString;
+					MainForm.DBFTable1.FieldByName( 'EREDSZLA' ).AsString := MainForm.SyncQuery.FieldByName( 'EREDSZLA' ).AsString;
+					MainForm.DBFTable1.FieldByName( 'FKMEGJ' ).AsString := 'Késztermék értékesítés';
+					MainForm.DBFTable1.FieldByName( 'DEVIZA' ).AsString := 'HUF';
+					MainForm.DBFTable1.FieldByName( 'ARFOLYAM1' ).AsFloat := 1;
+					MainForm.DBFTable1.FieldByName( 'ARFOLYAM2' ).AsFloat := 1;
+					MainForm.DBFTable1.FieldByName( 'FORDAFAS' ).AsString := 'N';
+					MainForm.DBFTable1.FieldByName( 'BANK' ).AsInteger := 1;
+					MainForm.DBFTable1.FieldByName( 'ALAP' ).AsFloat := MainForm.SyncQuery.FieldByName( 'DEVNETTO' ).AsFloat;
+					MainForm.DBFTable1.FieldByName( 'AFA' ).AsFloat := MainForm.SyncQuery.FieldByName( 'DEVAFA' ).AsFloat;
+					MainForm.DBFTable1.FieldByName( 'OSSZEG' ).AsFloat := MainForm.SyncQuery.FieldByName( 'DEVNETTO' ).AsFloat + MainForm.SyncQuery.FieldByName( 'DEVAFA' ).AsFloat;
+					MainForm.DBFTable1.FieldByName( 'DEVOSSZEG' ).AsFloat := MainForm.SyncQuery.FieldByName( 'DEVNETTO' ).AsFloat + MainForm.SyncQuery.FieldByName( 'DEVAFA' ).AsFloat;
+					MainForm.DBFTable1.Commit;
+					WriteLogFile( MainForm.SyncQuery.FieldByName( 'EV' ).AsString + '/' + MainForm.SyncQuery.FieldByName( 'SZLASZAM' ).AsString + ' számla adatainak felírása. ', 4 );
+					BizKontir.Clear;
+					BizKontir.BizSzam := IntToStr( MainForm.SyncQuery.FieldByName( 'EV' ).AsInteger ) + MainForm.SyncQuery.FieldByName( 'SZLASZAM' ).AsString;
+					BizKontir.BizTipus := 'P';
+					BizKontir.BizDate := MainForm.SyncQuery.FieldByName( 'TELJ' ).AsDateTime;
+					while ( not MainForm.SyncQuery.Eof ) and ( BizKontir.BizSzam = IntToStr( MainForm.SyncQuery.FieldByName( 'EV' ).AsInteger ) + MainForm.SyncQuery.FieldByName( 'SZLASZAM' ).AsString ) do begin
+						Application.ProcessMessages;
+// Számlasorok beszúrása (P15)
+						MainForm.DBFTable2.OEMTranslate := FALSE;
+						MainForm.AlmiraEnv.SetSoftSeek( FALSE );
+// Ha nincs még ilyen számla sor
+						cNewKey := MainForm.SyncQuery.FieldByName( 'EV' ).AsString + MainForm.SyncQuery.FieldByName( 'SZLASZAM' ).AsString +
+							PadL( MainForm.SyncQuery.FieldByName( 'SOR' ).AsString,2,' ' );
+						if ( not ( MainForm.DBFTable2.Seek( cNewKey ))) then begin
+							WriteLogFile( 'Új számla sor beszúrása :' + cNewKey, 2 );
+							MainForm.DBFTable2.OEMTranslate := TRUE;
+							MainForm.DBFTable2.Append;
+							MainForm.DBFTable2.FieldByName( 'EV' ).AsInteger := MainForm.SyncQuery.FieldByName( 'EV' ).AsInteger;
+							MainForm.DBFTable2.FieldByName( 'SZLASZAM' ).AsString := MainForm.SyncQuery.FieldByName( 'SZLASZAM' ).AsString;
+							MainForm.DBFTable2.FieldByName( 'SORSZAM' ).AsInteger := MainForm.SyncQuery.FieldByName( 'SOR' ).AsInteger;
+							MainForm.DBFTable2.FieldByName( 'ASZ' ).AsString := MainForm.SyncQuery.FieldByName( 'ASZ' ).AsString;
+							MainForm.DBFTable2.FieldByName( 'AFAKOD' ).AsInteger := MainForm.SyncQuery.FieldByName( 'AFAKOD' ).AsInteger;
+							MainForm.DBFTable2.FieldByName( 'MENNY' ).AsFloat := MainForm.SyncQuery.FieldByName( 'MENNY' ).AsFloat;
+							MainForm.DBFTable2.FieldByName( 'AR' ).AsFloat := MainForm.SyncQuery.FieldByName( 'NETTO' ).AsFloat;
+							MainForm.DBFTable2.FieldByName( 'AFA' ).AsFloat := MainForm.SyncQuery.FieldByName( 'AFA' ).AsFloat;
+							MainForm.DBFTable2.FieldByName( 'DEVAR' ).AsFloat := MainForm.SyncQuery.FieldByName( 'NETTO' ).AsFloat;
+							MainForm.DBFTable2.FieldByName( 'DEVAFA' ).AsFloat := MainForm.SyncQuery.FieldByName( 'AFA' ).AsFloat;
+							MainForm.DBFTable2.FieldByName( 'MEGJ' ).AsString := MainForm.SyncQuery.FieldByName( 'MEGJ' ).AsString;
+							MainForm.DBFTable2.FieldByName( 'PKOD' ).AsString := MainForm.SyncQuery.FieldByName( 'PKOD' ).AsString;
+							MainForm.DBFTable2.FieldByName( 'EGYSAR' ).AsFloat := MainForm.SyncQuery.FieldByName( 'EGYSAR' ).AsFloat;
+							MainForm.DBFTable2.FieldByName( 'PTIPUS' ).AsString := '311';
+							MainForm.DBFTable2.FieldByName( 'FKSZ' ).AsString := '911';
+							MainForm.DBFTable2.Commit;
+// Innen kezdõdik a kontírozás
+							cFKSz1 := '311   ' + MainForm.SyncQuery.FieldByName( 'PKOD' ).AsString;
+							cKTNem1 := '';
+							nRJ1 := 0;
+							cFKSz2 := '';
+							cKTNem2 := '';
+							nRJ2 := 0;
+// Rákeresünk az anyagszámra
+							MainForm.AlmiraEnv.SetSoftSeek( FALSE );
+							cNewKey := MainForm.SyncQuery.FieldByName( 'ASZ' ).AsString;
+							if ( MainForm.DBFTable4.Seek( cNewKey )) then begin
+								cFKSz2 := MainForm.DBFTable4.FieldByName( 'FKSZ3' ).AsString;
+								nRJ2 := MainForm.DBFTable4.FieldByName( 'RJ3' ).AsInteger;
+							end;
+							if ( cFKSz2 = '' ) then begin
+								cFKSz2 := '911';
+							end;
+// Rákeresünk az ÁFA kódra
+							cNewKey := MainForm.SyncQuery.FieldByName( 'AFAKOD' ).AsString;
+							MainForm.DBFTable3.Seek( cNewKey );
+							nRJ1 := MainForm.DBFTable3.FieldByName( 'VALAP' ).AsInteger;
+// Kikontírozzuk a számlasort
+							cNewKey := FormatDateTime( 'YYYYMMDD', MainForm.DBFTable1.FieldByName( 'TELJ' ).AsDateTime ) +
+								PadR( cFKSz1,11,' ' ) + PadR( cKTNem1,6,' ' ) + PadR( IntToStr( nRJ1 ),5, ' ' ) +
+								PadR( cFKSz2,11,' ' ) + PadR( cKTNem2,6,' ' ) + PadR( IntToStr( nRJ2 ),5, ' ' );
+							BizKontir.KeyInsert( cNewKey,
+								MainForm.DBFTable2.FieldByName( 'AR' ).AsFloat,
+								0,
+								MainForm.DBFTable2.FieldByName( 'MENNY' ).AsFloat,
+								'Késztermék értékesítés',
+								'Késztermék értékesítés' );
+
+							cFKSz1 := '311   ' + MainForm.SyncQuery.FieldByName( 'PKOD' ).AsString;
+							cKTNem1 := '';
+							nRJ1 := MainForm.DBFTable3.FieldByName( 'RJ1' ).AsInteger;
+							cFKSz2 := MainForm.DBFTable3.FieldByName( 'FKSZ' ).AsString;
+							cKTNem2 := '';
+							nRJ2 := MainForm.DBFTable3.FieldByName( 'RJ1' ).AsInteger;
+							cNewKey := FormatDateTime( 'YYYYMMDD', MainForm.DBFTable1.FieldByName( 'TELJ' ).AsDateTime ) +
+								PadR( cFKSz1,11,' ' ) + PadR( cKTNem1,6,' ' ) + PadR( IntToStr( nRJ1 ),5, ' ' ) +
+								PadR( cFKSz2,11,' ' ) + PadR( cKTNem2,6,' ' ) + PadR( IntToStr( nRJ2 ),5, ' ' );
+// Kikontírozzuk az ÁFÁ-t
+							BizKontir.KeyInsert( cNewKey,
+								MainForm.DBFTable2.FieldByName( 'AFA' ).AsFloat,
+								0,
+								0,
+								'Késztermék értékesítés ÁFA',
+								'Késztermék értékesítés ÁFA' );
+
+							nSumAlap := nSumAlap + MainForm.SyncQuery.FieldByName( 'NETTO' ).AsFloat;
+							nSumAFA := nSumAFA + MainForm.SyncQuery.FieldByName( 'AFA' ).AsFloat;
+							cLastBiz := MainForm.SyncQuery.FieldByName( 'SZLASZAM' ).AsString;
+							nCsoport := StrToInt( Copy( MainForm.SyncQuery.FieldByName( 'SZLASZAM' ).AsString,1,1 ));
+							nMaxSzla := StrToInt( Copy( MainForm.SyncQuery.FieldByName( 'SZLASZAM' ).AsString,2,7 ));
+							lWriteBiz := TRUE;
+						end else begin
+							WriteLogFile( 'Már létezõ számla sor :' + cNewKey, 2 );
+						end;
+						nLastAlap := MainForm.SyncQuery.FieldByName( 'DEVNETTO' ).AsFloat;
+						nLastAFA := MainForm.SyncQuery.FieldByName( 'DEVAFA' ).AsFloat;
+						MainForm.SyncQuery.Next;
+					end;
+// Felírjuk a számla kontírozását
+					BizKontir.WriteDBF( MainForm.DBFTable5 );
+					if ( nLastAlap <> nSumAlap ) or ( nLastAFA <> nSumAFA ) then begin
+						WriteLogFile( 'Hibás számla összeg : ' + MainForm.SyncQuery.FieldByName( 'SZLASZAM' ).AsString + ' (' +
+							FormatFloat( '0.00', nLastAlap ) + ' - ' + FormatFloat( '0.00', nSumAlap ) + ')', 4 );
+					end;
+				end else begin
+					WriteLogFile( 'Már létezõ számla :' + cNewKey, 2 );
+					MainForm.SyncQuery.Next;
+				end;
+				lWriteBiz := FALSE;
+				nSumAlap := 0;
+				nSumAFA := 0;
+			end;
+		end;
+		cSQL := 'UPDATE "syncdate" SET "syncdate"."lastdownload" = CURRENT_TIMESTAMP WHERE "syncdate"."tablename" = ' + QuotedStr( 'szamla' );;
+		MySQLCommand( cSQL );
+	end;
+	MainForm.SyncQuery.Close;
+	WriteLogFile( 'Számlák adatainak letöltése kész. ',2 );
+	MainForm.DBFTable1.Close;
+	MainForm.DBFTable2.Close;
+	if ( nCsoport <> 0 ) and ( nMaxSzla <> 0 ) then begin
+// Számlaszámok felírása
+		MainForm.DBFTable1.DatabaseName := Copy( InSyncItem.LocalYearDatabase, 1, Length( InSyncItem.LocalYearDatabase ) - 1 );
+		MainForm.DBFTable1.TableName := InSyncItem.LocalYearDatabase + 'P16.DBF';
+		try
+			MainForm.DBFTable1.Active := TRUE;
+			MainForm.DBFTable1.Exclusive := FALSE;
+			MainForm.DBFTable1.CloseIndexes;
+			MainForm.DBFTable1.IndexOpen( InSyncItem.LocalYearDatabase + 'P161.NTX' );
+			MainForm.DBFTable1.SetOrder( 1 );
+		except
+			on E : Exception do begin
+				WriteLogFile( 'Hiba a ' + InSyncItem.LocalYearDatabase + 'P16.DBF állomány megnyitásakor :' + E.Message,2 );
+				Exit;
+			end;
+		end;
+		MainForm.AlmiraEnv.SetSoftSeek( FALSE );
+		MainForm.DBFTable1.OEMTranslate := FALSE;
+		if ( MainForm.DBFTable1.Seek( IntToStr( nCsoport ))) then begin
+			MainForm.DBFTable1.Edit;
+			WriteLogFile( 'Számlaszámok felírása: ' + IntToStr( nCsoport ) + ' (' + IntToStr( nMaxSzla ) + ')',4 );
+			MainForm.DBFTable1.OEMTranslate := TRUE;
+			MainForm.DBFTable1.FieldByName( 'SORSZAM' ).AsInteger := nMaxSzla;
+			MainForm.DBFTable1.Commit;
+		end;
+		MainForm.DBFTable1.Close;
+	end;
+// Pénztár törzs
+	MainForm.DBFTable3.Close;
+	MainForm.DBFTable3.DatabaseName := Copy( InSyncItem.LocalYearDatabase, 1, Length( InSyncItem.LocalYearDatabase ) - 1 );
+	MainForm.DBFTable3.TableName := InSyncItem.LocalYearDatabase + 'P33.DBF';
+	try
+		MainForm.DBFTable3.Active := TRUE;
+		MainForm.DBFTable3.Exclusive := FALSE;
+		MainForm.DBFTable3.IndexDefs.Clear;
+		MainForm.DBFTable3.CloseIndexes;
+		MainForm.DBFTable3.IndexOpen( InSyncItem.LocalYearDatabase + 'P331.NTX' );
+		MainForm.DBFTable3.SetOrder( 1 );
+	except
+		on E : Exception do begin
+			WriteLogFile( 'Hiba a ' + InSyncItem.LocalYearDatabase + 'P33.DBF állomány megnyitásakor :' + E.Message,2 );
+			Exit;
+		end;
+	end;
+// Pénztárbizonylat letöltés
+	WriteLogFile( 'Linzer pénztárbizonylatok letöltése megkezdve.',2 );
+	MainForm.DBFTable1.Close;
+	MainForm.DBFTable1.DatabaseName := Copy( InSyncItem.LocalShareDatabase, 1, Length( InSyncItem.LocalShareDatabase ) - 1 );
+	MainForm.DBFTable1.TableName := InSyncItem.LocalShareDatabase + 'P31.DBF';
+	try
+		MainForm.DBFTable1.Active := TRUE;
+		MainForm.DBFTable1.Exclusive := FALSE;
+		MainForm.DBFTable1.CloseIndexes;
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalShareDatabase + 'P311.NTX' );
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalShareDatabase + 'P312.NTX' );
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalShareDatabase + 'P313.NTX' );
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalShareDatabase + 'P314.NTX' );
+		MainForm.DBFTable1.IndexOpen( InSyncItem.LocalShareDatabase + 'P315.NTX' );
+		MainForm.DBFTable1.SetOrder( 1 );
+	except
+		on E : Exception do begin
+			WriteLogFile( 'Hiba a ' + InSyncItem.LocalShareDatabase + 'P31.DBF állomány megnyitásakor :' + E.Message,2 );
+			Exit;
+		end;
+	end;
+
+// A legutolsó pénztárbizonylat megkeresése
+	cSQL := 'SELECT FIRST 1 "penztarbizonylat"."kulcs" FROM "penztarbizonylat"';
+	MySQLSelect( cSQL );
+	nCsoport := StrToInt( Copy( MainForm.SyncQuery.FieldByName( 'KULCS' ).AsString,5,2 ));
+	MainForm.DBFTable1.OEMTranslate := FALSE;
+	MainForm.AlmiraEnv.SetSoftSeek( TRUE );
+	cNewKey := Trim( IntToStr( InSyncItem.ActYear )) + PadL( IntToStr( nCsoport + 1 ),2,' ' );
+	WriteLogFile( 'Legutolsó pénztárbizonylat megkeresése :' + cNewKey, 4 );
+	MainForm.DBFTable1.Seek( cNewKey );
+	WriteLogFile( 'Rekordszám :' + IntToStr( MainForm.DBFTable1.RecordCount ), 4 );
+	WriteLogFile( 'Rekord :' + IntToStr( MainForm.DBFTable1.RecNo ), 4 );
+	WriteLogFile( 'Kikeresve :' + MainForm.DBFTable1.FieldByName( 'KULCS' ).AsString, 4 );
+	if ( MainForm.DBFTable1.Eof ) or ( MainForm.DBFTable1.RecNo > MainForm.DBFTable1.RecordCount ) then begin
+		MainForm.DBFTable1.GoTop;
+		MainForm.DBFTable1.Skip( MainForm.DBFTable1.RecordCount - 1 );
+			cNewKey := IntTosTr( InSyncItem.ActYear ) + PadL( IntToStr( nCsoport ),2,' ' ) + '0000001';
+	end else begin
+		if ( Copy( MainForm.DBFTable1.FieldByName( 'KULCS' ).AsString,1,4 ) < IntTosTr( InSyncItem.ActYear )) then begin
+			cNewKey := IntTosTr( InSyncItem.ActYear ) + PadL( IntToStr( nCsoport ),2,' ' ) + '0000001';
+		end else begin
+			if ( Copy( MainForm.DBFTable1.FieldByName( 'KULCS' ).AsString,1,4 ) > IntTosTr( InSyncItem.ActYear )) or
+			 ( Copy( MainForm.DBFTable1.FieldByName( 'KULCS' ).AsString,5,2 ) > PadL( IntToStr( nCsoport ),2,' ' )) then begin
+				MainForm.DBFTable1.Skip( -1 );
+				cNewKey := MainForm.DBFTable1.FieldByName( 'KULCS' ).AsString;
+			end;
+			if ( Copy( MainForm.DBFTable1.FieldByName( 'KULCS' ).AsString,1,4 ) = IntTosTr( InSyncItem.ActYear )) or
+			 ( Copy( MainForm.DBFTable1.FieldByName( 'KULCS' ).AsString,5,2 ) = PadL( IntToStr( nCsoport ),2,' ' )) then begin
+				cNewKey := MainForm.DBFTable1.FieldByName( 'KULCS' ).AsString;
+			 end;
+		end;
+	end;
+	nMaxSzla := StrToInt( Copy( cNewKey,7,7 ));
+	WriteLogFile( 'Legutolsó pénztárbizonylat :' + cNewKey, 4 );
+	WriteLogFile( 'Legutolsó pénztárbizonylat :' + IntToStr( nMaxSzla ), 4 );
+
+	cSQL := 'SELECT "penztarbizonylat"."kulcs", "penztarbizonylat"."szlaszam", "penztarbizonylat"."pkod", "penztarbizonylat"."kelt", ' +
+		'"penztarbizonylat"."fj", "penztarbizonylat"."forgalom", "penztarbizonylat"."megj", "penztarbizonylat"."arfolyam", "penztarbizonylat"."arfkul", ' +
+		'"penztarbizonylat"."devforg", "partner"."nev" FROM "penztarbizonylat" ' +
+		'LEFT JOIN "partner" ON ( "partner"."kod" = "penztarbizonylat"."pkod" ) ' +
+		'WHERE "penztarbizonylat"."kulcs" > ' + QuotedStr( cNewKey ) + ' ' +
+		'ORDER BY "kulcs"';
+	MySQLSelect( cSQL );
+	if ( MainForm.SyncQuery.RecordCount <> 0 ) then begin
+		cLastBiz := 'X';
+		lWriteBiz := FALSE;
+		MainForm.SyncQuery.First;
+		while ( not MainForm.SyncQuery.Eof ) do begin
+			Application.ProcessMessages;
+			MainForm.Refresh;
+// Beszúrjuk a bizonylatsort (P31)
+			MainForm.DBFTable1.OEMTranslate := FALSE;
+			MainForm.AlmiraEnv.SetSoftSeek( FALSE );
+// Ha nincs még ilyen pénztárbizonylat sor
+			MainForm.DBFTable1.Seek( MainForm.SyncQuery.FieldByName( 'KULCS' ).AsString );
+			if ( MainForm.SyncQuery.FieldByName( 'KULCS' ).AsString <> MainForm.DBFTable1.FieldByName( 'KULCS' ).AsString ) then begin
+				if ( cLastBiz = 'X' ) then begin
+					BizKontir.Clear;
+					BizKontir.BizSzam := LeftStr( MainForm.SyncQuery.FieldByName( 'KULCS' ).AsString,13 );
+					BizKontir.BizTipus := 'S';
+					BizKontir.BizDate := MainForm.SyncQuery.FieldByName( 'KELT' ).AsDateTime;
+				end;
+				WriteLogFile( 'Új pénztárbizonylat sor beszúrása :' + MainForm.SyncQuery.FieldByName( 'KULCS' ).AsString, 4 );
+				MainForm.DBFTable1.OEMTranslate := TRUE;
+				MainForm.DBFTable1.Append;
+				MainForm.DBFTable1.FieldByName( 'KULCS' ).AsString := MainForm.SyncQuery.FieldByName( 'KULCS' ).AsString;
+				MainForm.DBFTable1.FieldByName( 'KELT' ).AsDateTime := MainForm.SyncQuery.FieldByName( 'KELT' ).AsDateTime;
+				MainForm.DBFTable1.FieldByName( 'FJ' ).AsString := MainForm.SyncQuery.FieldByName( 'FJ' ).AsString;
+				MainForm.DBFTable1.FieldByName( 'MEGJ' ).AsString := MainForm.SyncQuery.FieldByName( 'MEGJ' ).AsString;
+				MainForm.DBFTable1.FieldByName( 'DEVFORG' ).AsFloat := MainForm.SyncQuery.FieldByName( 'DEVFORG' ).AsFloat;
+				MainForm.DBFTable1.FieldByName( 'FORGALOM' ).AsFloat := MainForm.SyncQuery.FieldByName( 'FORGALOM' ).AsFloat;
+				MainForm.DBFTable1.FieldByName( 'ARFOLYAM' ).AsFloat := MainForm.SyncQuery.FieldByName( 'ARFOLYAM' ).AsFloat;
+				if ( MainForm.SyncQuery.FieldByName( 'FJ' ).AsString = 'B' ) then begin
+					MainForm.DBFTable1.FieldByName( 'SZFJ' ).AsString := 'K';
+					if (MainForm.SyncQuery.FieldByName( 'PKOD' ).AsInteger = 0 ) then begin
+						MainForm.DBFTable1.FieldByName( 'FKSZ' ).AsString := '';
+						MainForm.DBFTable1.FieldByName( 'SZLASZAM' ).AsString := LeftStr( MainForm.SyncQuery.FieldByName( 'KULCS' ).AsString,4 ) + 'V1';
+						MainForm.DBFTable1.FieldByName( 'PKOD' ).AsString := '';
+					end else begin
+						MainForm.DBFTable1.FieldByName( 'FKSZ' ).AsString := '311   ' + MainForm.SyncQuery.FieldByName( 'PKOD' ).AsString;
+						MainForm.DBFTable1.FieldByName( 'SZLASZAM' ).AsString := MainForm.SyncQuery.FieldByName( 'SZLASZAM' ).AsString;
+					MainForm.DBFTable1.FieldByName( 'PKOD' ).AsString := MainForm.SyncQuery.FieldByName( 'PKOD' ).AsString;
+					end;
+				end else begin
+					MainForm.DBFTable1.FieldByName( 'SZFJ' ).AsString := 'B';
+					MainForm.DBFTable1.FieldByName( 'SZLASZAM' ).AsString := LeftStr( MainForm.SyncQuery.FieldByName( 'KULCS' ).AsString,4 ) + 'V1';
+					MainForm.DBFTable1.FieldByName( 'PKOD' ).AsString := '';
+				end;
+				MainForm.DBFTable1.FieldByName( 'UTDAT' ).AsFloat := Now;
+				MainForm.DBFTable1.FieldByName( 'ROGKOD' ).AsFloat := 99;
+				MainForm.DBFTable1.Commit;
+				nMaxSzla := StrToInt( Copy( MainForm.SyncQuery.FieldByName( 'KULCS' ).AsString,7,7 ));
+				nCsoport := StrToInt( Copy( MainForm.SyncQuery.FieldByName( 'KULCS' ).AsString,5,2 ));
+// Innen jön a kontírozós rész
+				if ( MainForm.SyncQuery.FieldByName( 'FJ' ).AsString = 'B' ) then begin
+					lWriteBiz := TRUE;
+					MainForm.AlmiraEnv.SetSoftSeek( FALSE );
+					MainForm.DBFTable3.OEMTranslate := FALSE;
+					MainForm.DBFTable3.Seek( IntToStr( nCsoport ));
+					cFKSz1 := '311   ' + MainForm.SyncQuery.FieldByName( 'PKOD' ).AsString;
+					cKTNem1 := '';
+					nRJ1 := 0;
+					cFKSz2 := MainForm.DBFTable3.FieldByName( 'FKSZ' ).AsString;
+					cKTNem2 := '';
+					nRJ2 := 0;
+// Kikontírozzuk a pénztárbizonylatot
+					cNewKey := FormatDateTime( 'YYYYMMDD', MainForm.DBFTable1.FieldByName( 'KELT' ).AsDateTime ) +
+						PadR( cFKSz1,11,' ' ) + PadR( cKTNem1,6,' ' ) + PadR( IntToStr( nRJ1 ),5, ' ' ) +
+						PadR( cFKSz2,11,' ' ) + PadR( cKTNem2,6,' ' ) + PadR( IntToStr( nRJ2 ),5, ' ' );
+					BizKontir.KeyInsert( cNewKey,
+						MainForm.DBFTable1.FieldByName( 'FORGALOM' ).AsFloat,
+						0,
+						0,
+						MainForm.SyncQuery.FieldByName( 'NEV' ).AsString,
+						MainForm.SyncQuery.FieldByName( 'NEV' ).AsString );
+				end;
+			end;
+			cLastBiz := LeftStr( MainForm.SyncQuery.FieldByName( 'KULCS' ).AsString,13 );
+			MainForm.SyncQuery.Next;
+			if ( cLastBiz <> LeftStr( MainForm.SyncQuery.FieldByName( 'KULCS' ).AsString, 13 )) then begin
+				if ( lWriteBiz ) then begin
+// Felírjuk a bizonylat kontírozását
+					BizKontir.WriteDBF( MainForm.DBFTable5 );
+				end;
+				cLastBiz := 'X';
+			end;
+		end;
+	end;
+	MainForm.SyncQuery.Close;
+// pénztárbizonylat számának felírása
+	if ( nCsoport <> 0 ) and ( nMaxSzla <> 0 ) then begin
+		MainForm.AlmiraEnv.SetSoftSeek( FALSE );
+		MainForm.DBFTable3.OEMTranslate := FALSE;
+		if ( MainForm.DBFTable3.Seek( IntToStr( nCsoport ))) then begin
+			MainForm.DBFTable3.Edit;
+			WriteLogFile( 'Bizonylatszámok felírása: ' + IntToStr( nCsoport ) + ' (' + IntToStr( nMaxSzla ) + ')',4 );
+			MainForm.DBFTable3.OEMTranslate := TRUE;
+			MainForm.DBFTable3.FieldByName( 'BIZSZAM' ).AsInteger := nMaxSzla;
+			MainForm.DBFTable3.Commit;
+		end;
+	end;
+	MainForm.DBFTable1.CloseIndexes;
+	MainForm.DBFTable1.Close;
+	MainForm.DBFTable2.Close;
+	MainForm.DBFTable3.Close;
+	MainForm.DBFTable4.Close;
+	MainForm.DBFTable5.Close;
+	cSQL := 'UPDATE "syncdate" SET "syncdate"."lastdownload" = CURRENT_TIMESTAMP WHERE "syncdate"."tablename" = ' + QuotedStr( 'penztarbizonylat' );;
+	MySQLCommand( cSQL );
+	WriteLogFile( 'Pénztárbizonylat adatok letöltése kész. ',2 );
+
+	StartButton.Enabled := TRUE;
+	BizKontir.Destroy;
+end;
+
+end.

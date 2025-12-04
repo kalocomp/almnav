@@ -1,0 +1,254 @@
+2025.12.03 12:09:14 - Program indítása
+2025.12.03 12:09:14 - Könyvtár ellenõrizve (log) F:\Delphi\AlmNAV\log
+2025.12.03 12:09:14 - Könyvtár ellenõrizve (receivexml) F:\Delphi\AlmNAV\receivexml
+2025.12.03 12:09:14 - Könyvtár ellenõrizve (sendxml) F:\Delphi\AlmNAV\sendxml
+2025.12.03 12:09:14 - Könyvtár ellenõrizve (invoice) F:\Delphi\AlmNAV\invoice
+2025.12.03 12:09:14 - Balloon bekapcsolva...
+2025.12.03 12:09:14 - -------------------
+2025.12.03 12:09:14 - A program elindítva (Loggolási szint : 4)
+2025.12.03 12:09:14 - A NAV.DBF állomány ellenõrizve.
+2025.12.03 12:09:14 - A NAV.DBF állomány sikeresen megnyitva.
+2025.12.03 12:09:14 - Számlalista mérete: 4 byte
+2025.12.03 12:09:14 - A CEGEK.DBF állomány ellenõrizve.
+2025.12.03 12:09:15 - Régi fájlok törlése indul (2025.11.04)
+2025.12.03 12:09:15 - 0db régi fájl törölve.
+2025.12.03 12:09:17 - XML file rögzítve
+2025.12.03 12:09:17 - A program bezárva
+2025.12.03 12:09:17 - -------------------
+2025.12.03 12:25:22 - Program indítása
+2025.12.03 12:25:22 - Könyvtár ellenõrizve (log) F:\Delphi\AlmNAV\log
+2025.12.03 12:25:22 - Könyvtár ellenõrizve (receivexml) F:\Delphi\AlmNAV\receivexml
+2025.12.03 12:25:22 - Könyvtár ellenõrizve (sendxml) F:\Delphi\AlmNAV\sendxml
+2025.12.03 12:25:22 - Könyvtár ellenõrizve (invoice) F:\Delphi\AlmNAV\invoice
+2025.12.03 12:25:22 - Nem létezõ könyvtár (einvoice)
+2025.12.03 12:25:22 - Balloon bekapcsolva...
+2025.12.03 12:25:22 - -------------------
+2025.12.03 12:25:22 - A program elindítva (Loggolási szint : 4)
+2025.12.03 12:25:22 - A NAV.DBF állomány ellenõrizve.
+2025.12.03 12:25:22 - A NAV.DBF állomány sikeresen megnyitva.
+2025.12.03 12:25:22 - Számlalista mérete: 4 byte
+2025.12.03 12:25:22 - A CEGEK.DBF állomány ellenõrizve.
+2025.12.03 12:25:22 - Régi fájlok törlése indul (2025.11.04)
+2025.12.03 12:25:22 - 0db régi fájl törölve.
+2025.12.03 12:25:27 - XML file rögzítve
+2025.12.03 12:25:27 - A program bezárva
+2025.12.03 12:25:27 - -------------------
+2025.12.03 12:43:38 - Program indítása
+2025.12.03 12:43:38 - Könyvtár ellenõrizve (log) F:\Delphi\AlmNAV\log
+2025.12.03 12:43:38 - Könyvtár ellenõrizve (receivexml) F:\Delphi\AlmNAV\receivexml
+2025.12.03 12:43:38 - Könyvtár ellenõrizve (sendxml) F:\Delphi\AlmNAV\sendxml
+2025.12.03 12:43:38 - Könyvtár ellenõrizve (invoice) F:\Delphi\AlmNAV\invoice
+2025.12.03 12:43:38 - Könyvtár ellenõrizve (einvoice) einvoice
+2025.12.03 12:43:38 - Balloon bekapcsolva...
+2025.12.03 12:43:38 - -------------------
+2025.12.03 12:43:38 - A program elindítva (Loggolási szint : 4)
+2025.12.03 12:43:38 - A NAV.DBF állomány ellenõrizve.
+2025.12.03 12:43:38 - A NAV.DBF állomány sikeresen megnyitva.
+2025.12.03 12:43:38 - Számlalista mérete: 4 byte
+2025.12.03 12:43:38 - A CEGEK.DBF állomány ellenõrizve.
+2025.12.03 12:43:38 - Régi fájlok törlése indul (2025.11.04)
+2025.12.03 12:43:38 - 0db régi fájl törölve.
+2025.12.03 12:43:45 - Kézi számlaküldés.
+2025.12.03 12:43:45 - Számla adatok küldése : Linzer Kft. - 2025/1-0007362 (Linzer Kft.)
+2025.12.03 12:43:45 - RequestID : S11024604203000520251203124345 (5. rekord)
+2025.12.03 12:43:45 - T11024604203000520251203124345 - token kérése
+2025.12.03 12:43:45 - Login : gxtv8h0f9kdgygt
+2025.12.03 12:43:45 - Jelszó : Almira2008
+2025.12.03 12:43:45 - Titkosított jelszó : DFF055D58A33949BA96B325CFB90F679A58C2A46D9A0D10081DEFBDAE876D022CEA2E83C6E5B733E0D723D94A0F6128A231241632DE995F71489323C94B8FE39
+2025.12.03 12:43:45 - RequestSiganture : T110246042030005202512031243452025120311434584-acbf-16a43b50e6872YMVT6FUDA5K
+2025.12.03 12:43:45 - RequestSiganture (SHA3-512) : 98BDC887F5AAA45EBCC683D3FA41BB8E0A2C1EB2888F8DFF5F5F31551DE75F3D5899E592B7F8E563A21DCB8ADB50ABD6E7E1DADA21EC61B3E0107CEB14095CBC
+2025.12.03 12:43:45 - XML file elkészítése (token.xml)
+2025.12.03 12:43:45 - XML file elkészítése megtörtént ( F:\Delphi\AlmNAV\sendxml\token.xml)
+2025.12.03 12:43:45 - XML file küldésének megkezdése (F:\Delphi\AlmNAV\sendxml\token.xml)
+2025.12.03 12:43:45 - XML file küldése (https://api-test.onlineszamla.nav.gov.hu/invoiceService/v3/tokenExchange)
+2025.12.03 12:43:46 - HTTP - Resolving hostname api-test.onlineszamla.nav.gov.hu.
+2025.12.03 12:43:46 - HTTP - Connecting to 84.206.52.71.
+2025.12.03 12:43:46 - SSL - SSL status: "before/connect initialization"
+2025.12.03 12:43:46 - SSL - SSL status: "before/connect initialization"
+2025.12.03 12:43:46 - SSL - SSL status: "SSLv3 write client hello A"
+2025.12.03 12:43:46 - SSL - SSL status: "SSLv3 read server hello A"
+2025.12.03 12:43:46 - SSL - SSL status: "SSLv3 read server certificate A"
+2025.12.03 12:43:46 - SSL - SSL status: "SSLv3 read server key exchange A"
+2025.12.03 12:43:46 - SSL - SSL status: "SSLv3 read server done A"
+2025.12.03 12:43:46 - SSL - SSL status: "SSLv3 write client key exchange A"
+2025.12.03 12:43:46 - SSL - SSL status: "SSLv3 write change cipher spec A"
+2025.12.03 12:43:46 - SSL - SSL status: "SSLv3 write finished A"
+2025.12.03 12:43:46 - SSL - SSL status: "SSLv3 flush data"
+2025.12.03 12:43:46 - SSL - SSL status: "SSLv3 read finished A"
+2025.12.03 12:43:46 - SSL - SSL status: "SSL negotiation finished successfully"
+2025.12.03 12:43:46 - SSL - SSL status: "SSL negotiation finished successfully"
+2025.12.03 12:43:46 - SSL - Cipher: name = ECDHE-ECDSA-AES256-GCM-SHA384; description = ECDHE-ECDSA-AES256-GCM-SHA384 TLSv1.2 Kx=ECDH     Au=ECDSA Enc=AESGCM(256) Mac=AEAD
+; bits = 256; version = TLSv1/SSLv3; 
+2025.12.03 12:43:46 - HTTP - Connected.
+2025.12.03 12:43:46 - HTTP working - 1455
+2025.12.03 12:43:46 - HTTP working - 1305
+2025.12.03 12:43:46 - Az XML file küldés befejezve (F:\Delphi\AlmNAV\sendxml\token.xml)
+2025.12.03 12:43:46 - Az XML file küldése hibátlan (F:\Delphi\AlmNAV\sendxml\token.xml)
+2025.12.03 12:43:46 - A válasz token : Pt8bayAZS+D+JFdpAcyN0oQvCusVyJnzt3PSe0xmkhO5ZGEFTTxnXeGlThFtjbVNCyG9gcR3Zy4CGjSsy5z82g==
+2025.12.03 12:43:46 - Számla XML beolvasása (F:\CEGEK\LINZER\RAKT2025\01.CEG\OLSZAMLA\10007362.xml)
+2025.12.03 12:43:46 - S11024604203000520251203124345 - számla küldése
+2025.12.03 12:43:46 - Token dekódoklása - token:Pt8bayAZS+D+JFdpAcyN0oQvCusVyJnzt3PSe0xmkhO5ZGEFTTxnXeGlThFtjbVNCyG9gcR3Zy4CGjSsy5z82g==
+2025.12.03 12:43:46 - Token dekódoklása - csere kulcs:7eec2YMVT6FUFNEU
+2025.12.03 12:43:46 - Dekódolt token :47bcbf17-01cc-4b98-b6bc-d54bd0ab6e2257BO1XK8TGC0
+2025.12.03 12:43:46 - Titkosított jelszó : DFF055D58A33949BA96B325CFB90F679A58C2A46D9A0D10081DEFBDAE876D022CEA2E83C6E5B733E0D723D94A0F6128A231241632DE995F71489323C94B8FE39
+2025.12.03 12:43:46 - RequestSiganture : S110246042030005202512031243452025120311434684-acbf-16a43b50e6872YMVT6FUDA5K4BA5A603597965D4D93B50442B0C37E1CE722354E7A1F0503F19A26BFFBBCD26D42DE1B04AB43E45DA5762CA1666098894035F88DD7809D8239E2670133E0246
+2025.12.03 12:43:46 - RequestSiganture (SHA3-512) : 44B972591B7EAAB6C215B8F7F766DD66271AE2B79734D624F5F8A67605424B81DA64AECE3D9C382A7AC63EFEB56CE498513E1F66179B67DC946A1A69708C6AE2
+2025.12.03 12:43:46 - XML file elkészítése (S11024604203000520251203124345.xml)
+2025.12.03 12:43:46 - XML file elkészítése megtörtént (F:\Delphi\AlmNAV\sendxml\S11024604203000520251203124345.xml)
+2025.12.03 13:04:02 - Program indítása
+2025.12.03 13:04:02 - Könyvtár ellenõrizve (log) F:\Delphi\AlmNAV\log
+2025.12.03 13:04:02 - Könyvtár ellenõrizve (receivexml) F:\Delphi\AlmNAV\receivexml
+2025.12.03 13:04:02 - Könyvtár ellenõrizve (sendxml) F:\Delphi\AlmNAV\sendxml
+2025.12.03 13:04:02 - Könyvtár ellenõrizve (invoice) F:\Delphi\AlmNAV\invoice
+2025.12.03 13:04:02 - Könyvtár ellenõrizve (einvoice) einvoice
+2025.12.03 13:04:02 - Balloon bekapcsolva...
+2025.12.03 13:04:02 - -------------------
+2025.12.03 13:04:02 - A program elindítva (Loggolási szint : 4)
+2025.12.03 13:04:02 - A NAV.DBF állomány ellenõrizve.
+2025.12.03 13:04:02 - A NAV.DBF állomány sikeresen megnyitva.
+2025.12.03 13:04:02 - Számlalista mérete: 4 byte
+2025.12.03 13:04:02 - A CEGEK.DBF állomány ellenõrizve.
+2025.12.03 13:04:02 - Régi fájlok törlése indul (2025.11.04)
+2025.12.03 13:04:02 - 0db régi fájl törölve.
+2025.12.03 13:04:07 - Kézi számlaküldés.
+2025.12.03 13:04:07 - Számla adatok küldése : Linzer Kft. - 2025/1-0007362 (Linzer Kft.)
+2025.12.03 13:04:07 - RequestID : S11024604203000520251203130407 (5. rekord)
+2025.12.03 13:04:07 - T11024604203000520251203130407 - token kérése
+2025.12.03 13:04:07 - Login : gxtv8h0f9kdgygt
+2025.12.03 13:04:07 - Jelszó : Almira2008
+2025.12.03 13:04:07 - Titkosított jelszó : DFF055D58A33949BA96B325CFB90F679A58C2A46D9A0D10081DEFBDAE876D022CEA2E83C6E5B733E0D723D94A0F6128A231241632DE995F71489323C94B8FE39
+2025.12.03 13:04:07 - RequestSiganture : T110246042030005202512031304072025120312040784-acbf-16a43b50e6872YMVT6FUDA5K
+2025.12.03 13:04:07 - RequestSiganture (SHA3-512) : F8B2F980B9BE548D44BC65CA48FDB0DA565342AE936D73C22B36A6033057E6EF65D6D73F24FE876F888FE70C591952273FD0F6149E049FBD7427765B2993CEFC
+2025.12.03 13:04:08 - XML file elkészítése (token.xml)
+2025.12.03 13:04:08 - XML file elkészítése megtörtént ( F:\Delphi\AlmNAV\sendxml\token.xml)
+2025.12.03 13:04:08 - XML file küldésének megkezdése (F:\Delphi\AlmNAV\sendxml\token.xml)
+2025.12.03 13:04:08 - XML file küldése (https://api-test.onlineszamla.nav.gov.hu/invoiceService/v3/tokenExchange)
+2025.12.03 13:04:08 - HTTP - Resolving hostname api-test.onlineszamla.nav.gov.hu.
+2025.12.03 13:04:08 - HTTP - Connecting to 84.206.52.71.
+2025.12.03 13:04:08 - SSL - SSL status: "before/connect initialization"
+2025.12.03 13:04:08 - SSL - SSL status: "before/connect initialization"
+2025.12.03 13:04:08 - SSL - SSL status: "SSLv3 write client hello A"
+2025.12.03 13:04:08 - SSL - SSL status: "SSLv3 read server hello A"
+2025.12.03 13:04:08 - SSL - SSL status: "SSLv3 read server certificate A"
+2025.12.03 13:04:08 - SSL - SSL status: "SSLv3 read server key exchange A"
+2025.12.03 13:04:08 - SSL - SSL status: "SSLv3 read server done A"
+2025.12.03 13:04:08 - SSL - SSL status: "SSLv3 write client key exchange A"
+2025.12.03 13:04:08 - SSL - SSL status: "SSLv3 write change cipher spec A"
+2025.12.03 13:04:08 - SSL - SSL status: "SSLv3 write finished A"
+2025.12.03 13:04:08 - SSL - SSL status: "SSLv3 flush data"
+2025.12.03 13:04:08 - SSL - SSL status: "SSLv3 read finished A"
+2025.12.03 13:04:08 - SSL - SSL status: "SSL negotiation finished successfully"
+2025.12.03 13:04:08 - SSL - SSL status: "SSL negotiation finished successfully"
+2025.12.03 13:04:08 - SSL - Cipher: name = ECDHE-ECDSA-AES256-GCM-SHA384; description = ECDHE-ECDSA-AES256-GCM-SHA384 TLSv1.2 Kx=ECDH     Au=ECDSA Enc=AESGCM(256) Mac=AEAD
+; bits = 256; version = TLSv1/SSLv3; 
+2025.12.03 13:04:08 - HTTP - Connected.
+2025.12.03 13:04:09 - HTTP working - 1455
+2025.12.03 13:04:09 - HTTP working - 1303
+2025.12.03 13:04:09 - Az XML file küldés befejezve (F:\Delphi\AlmNAV\sendxml\token.xml)
+2025.12.03 13:04:09 - Az XML file küldése hibátlan (F:\Delphi\AlmNAV\sendxml\token.xml)
+2025.12.03 13:04:09 - A válasz token : Ldv5VvfvbeiZh0K9cA9UwxmUCo+K9N+Zbn1waQENRFnYQOAQiAezXC7S7DswCvGHCyG9gcR3Zy4CGjSsy5z82g==
+2025.12.03 13:04:09 - Számla XML beolvasása (F:\CEGEK\LINZER\RAKT2025\01.CEG\OLSZAMLA\10007362.xml)
+2025.12.03 13:04:09 - S11024604203000520251203130407 - számla küldése
+2025.12.03 13:04:09 - Token dekódoklása - token:Ldv5VvfvbeiZh0K9cA9UwxmUCo+K9N+Zbn1waQENRFnYQOAQiAezXC7S7DswCvGHCyG9gcR3Zy4CGjSsy5z82g==
+2025.12.03 13:04:09 - Token dekódoklása - csere kulcs:7eec2YMVT6FUFNEU
+2025.12.03 13:04:09 - Dekódolt token :446702d3-af3c-4ca8-9340-01595962a2a057BOS4P66NXE
+2025.12.03 13:04:09 - Titkosított jelszó : DFF055D58A33949BA96B325CFB90F679A58C2A46D9A0D10081DEFBDAE876D022CEA2E83C6E5B733E0D723D94A0F6128A231241632DE995F71489323C94B8FE39
+2025.12.03 13:04:09 - RequestSiganture : S110246042030005202512031304072025120312040984-acbf-16a43b50e6872YMVT6FUDA5K4BA5A603597965D4D93B50442B0C37E1CE722354E7A1F0503F19A26BFFBBCD26D42DE1B04AB43E45DA5762CA1666098894035F88DD7809D8239E2670133E0246
+2025.12.03 13:04:09 - RequestSiganture (SHA3-512) : 11434B3767FA6D77B89A4DE922E7F4639DEF353A7F955853CB5D284F9FA6ABDA3964E516F3E2725CA92318773B1BAEB2EA04FFFE53FFD859014B463DEDC7C089
+2025.12.03 13:04:09 - XML file elkészítése (S11024604203000520251203130407.xml)
+2025.12.03 13:04:09 - XML file elkészítése megtörtént (F:\Delphi\AlmNAV\sendxml\S11024604203000520251203130407.xml)
+2025.12.03 13:04:09 - XML file küldése indul (F:\Delphi\AlmNAV\sendxml\S11024604203000520251203130407.xml)
+2025.12.03 13:04:09 - XML file küldésének megkezdése (F:\Delphi\AlmNAV\sendxml\S11024604203000520251203130407.xml)
+2025.12.03 13:04:09 - XML file küldése (https://api-test.onlineszamla.nav.gov.hu/invoiceService/v3/manageInvoice)
+2025.12.03 13:04:09 - HTTP - Disconnecting.
+2025.12.03 13:04:09 - SSL - SSL status: "SSL negotiation finished successfully"
+2025.12.03 13:04:09 - HTTP - Disconnected.
+2025.12.03 13:04:09 - HTTP - Resolving hostname api-test.onlineszamla.nav.gov.hu.
+2025.12.03 13:04:09 - HTTP - Connecting to 84.206.52.71.
+2025.12.03 13:04:09 - SSL - SSL status: "before/connect initialization"
+2025.12.03 13:04:09 - SSL - SSL status: "before/connect initialization"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 write client hello A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 read server hello A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 read server certificate A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 read server key exchange A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 read server done A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 write client key exchange A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 write change cipher spec A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 write finished A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 flush data"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 read finished A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSL negotiation finished successfully"
+2025.12.03 13:04:09 - SSL - SSL status: "SSL negotiation finished successfully"
+2025.12.03 13:04:09 - SSL - Cipher: name = ECDHE-ECDSA-AES256-GCM-SHA384; description = ECDHE-ECDSA-AES256-GCM-SHA384 TLSv1.2 Kx=ECDH     Au=ECDSA Enc=AESGCM(256) Mac=AEAD
+; bits = 256; version = TLSv1/SSLv3; 
+2025.12.03 13:04:09 - HTTP - Connected.
+2025.12.03 13:04:09 - HTTP working - 11598
+2025.12.03 13:04:09 - HTTP working - 1081
+2025.12.03 13:04:09 - Az XML file küldés befejezve (F:\Delphi\AlmNAV\sendxml\S11024604203000520251203130407.xml)
+2025.12.03 13:04:09 - Az XML file küldése hibátlan (F:\Delphi\AlmNAV\sendxml\S11024604203000520251203130407.xml)
+2025.12.03 13:04:09 - A számla hibátlanul elküldve.
+2025.12.03 13:04:09 - A számla küldés azonosító : 57BOS4YAQ3YQRFII
+2025.12.03 13:04:09 - Balloon bekapcsolva...
+2025.12.03 13:04:09 - Számla állapot lekérdezése : Q11024604203000520251203130409 (5. rekord)
+2025.12.03 13:04:09 - XML file elkészítése (Q11024604203000520251203130409.xml)
+2025.12.03 13:04:09 - XML file elkészítése megtörtént (F:\Delphi\AlmNAV\sendxml\Q11024604203000520251203130409.xml)
+2025.12.03 13:04:09 - XML file küldése indul (Q11024604203000520251203130409.xml)
+2025.12.03 13:04:09 - XML file küldésének megkezdése (F:\Delphi\AlmNAV\sendxml\Q11024604203000520251203130409.xml)
+2025.12.03 13:04:09 - XML file küldése (https://api-test.onlineszamla.nav.gov.hu/invoiceService/v3/queryTransactionStatus)
+2025.12.03 13:04:09 - HTTP - Disconnecting.
+2025.12.03 13:04:09 - SSL - SSL status: "SSL negotiation finished successfully"
+2025.12.03 13:04:09 - HTTP - Disconnected.
+2025.12.03 13:04:09 - HTTP - Resolving hostname api-test.onlineszamla.nav.gov.hu.
+2025.12.03 13:04:09 - HTTP - Connecting to 84.206.52.71.
+2025.12.03 13:04:09 - SSL - SSL status: "before/connect initialization"
+2025.12.03 13:04:09 - SSL - SSL status: "before/connect initialization"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 write client hello A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 read server hello A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 read server certificate A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 read server key exchange A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 read server done A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 write client key exchange A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 write change cipher spec A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 write finished A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 flush data"
+2025.12.03 13:04:09 - SSL - SSL status: "SSLv3 read finished A"
+2025.12.03 13:04:09 - SSL - SSL status: "SSL negotiation finished successfully"
+2025.12.03 13:04:09 - SSL - SSL status: "SSL negotiation finished successfully"
+2025.12.03 13:04:09 - SSL - Cipher: name = ECDHE-ECDSA-AES256-GCM-SHA384; description = ECDHE-ECDSA-AES256-GCM-SHA384 TLSv1.2 Kx=ECDH     Au=ECDSA Enc=AESGCM(256) Mac=AEAD
+; bits = 256; version = TLSv1/SSLv3; 
+2025.12.03 13:04:09 - HTTP - Connected.
+2025.12.03 13:04:09 - HTTP working - 1577
+2025.12.03 13:04:09 - HTTP working - 11398
+2025.12.03 13:04:09 - Az XML file küldés befejezve (F:\Delphi\AlmNAV\sendxml\Q11024604203000520251203130409.xml)
+2025.12.03 13:04:09 - Az XML file küldése hibátlan (F:\Delphi\AlmNAV\sendxml\Q11024604203000520251203130409.xml)
+2025.12.03 13:04:09 - A számla állapota lekérdezve.
+2025.12.03 13:04:09 - Email küldése a hibáról indul...
+2025.12.03 13:04:09 - SMTP szerver - smtp.gmail.com
+2025.12.03 13:04:09 - Felhasználónév - kalocomp
+2025.12.03 13:04:09 - SMTP szerver port - 587
+2025.12.03 13:04:09 - HTTP - Resolving hostname smtp.gmail.com.
+2025.12.03 13:04:09 - HTTP - Connecting to 64.233.184.109.
+2025.12.03 13:04:09 - HTTP - Connected.
+2025.12.03 13:04:10 - SMTP szerverhez csatlakozva
+2025.12.03 13:04:10 - SSL - SSL status: "before/connect initialization"
+2025.12.03 13:04:10 - SSL - SSL status: "before/connect initialization"
+2025.12.03 13:04:10 - SSL - SSL status: "SSLv3 write client hello A"
+2025.12.03 13:04:10 - SSL - SSL status: "SSLv3 read server hello A"
+2025.12.03 13:04:10 - SSL - SSL status: "SSLv3 read server certificate A"
+2025.12.03 13:04:10 - SSL - SSL status: "SSLv3 read server key exchange A"
+2025.12.03 13:04:10 - SSL - SSL status: "SSLv3 read server done A"
+2025.12.03 13:04:10 - SSL - SSL status: "SSLv3 write client key exchange A"
+2025.12.03 13:04:10 - SSL - SSL status: "SSLv3 write change cipher spec A"
+2025.12.03 13:04:10 - SSL - SSL status: "SSLv3 write finished A"
+2025.12.03 13:04:10 - SSL - SSL status: "SSLv3 flush data"
+2025.12.03 13:04:10 - SSL - SSL status: "SSLv3 read server session ticket A"
+2025.12.03 13:04:10 - SSL - SSL status: "SSLv3 read finished A"
+2025.12.03 13:04:10 - SSL - SSL status: "SSL negotiation finished successfully"
+2025.12.03 13:04:10 - SSL - SSL status: "SSL negotiation finished successfully"
+2025.12.03 13:04:10 - SSL - Cipher: name = ECDHE-ECDSA-AES128-GCM-SHA256; description = ECDHE-ECDSA-AES128-GCM-SHA256 TLSv1.2 Kx=ECDH     Au=ECDSA Enc=AESGCM(128) Mac=AEAD
+; bits = 128; version = TLSv1/SSLv3; 
+2025.12.03 13:04:10 - A számla feldolgozottsági állapota : ABORTED
+2025.12.03 13:04:38 - XML file rögzítve
+2025.12.03 13:04:38 - A program bezárva
+2025.12.03 13:04:38 - -------------------
+2025.12.03 13:04:38 - SSL - SSL status: "SSL negotiation finished successfully"

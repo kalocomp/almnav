@@ -1,0 +1,137 @@
+<InvoiceData xmlns="http://schemas.nav.gov.hu/OSA/3.0/data" xmlns:ns2="http://schemas.nav.gov.hu/OSA/3.0/base">
+	<invoiceNumber>2023/4-0000001</invoiceNumber>
+	<invoiceIssueDate>2023-01-04</invoiceIssueDate>
+	<completenessIndicator>false</completenessIndicator>
+	<invoiceMain>
+		<invoice>
+			<invoiceHead>
+				<supplierInfo>
+					<supplierTaxNumber>
+						<ns2:taxpayerId>11421427</ns2:taxpayerId>
+						<ns2:vatCode>2</ns2:vatCode>
+						<ns2:countyCode>03</ns2:countyCode>
+					</supplierTaxNumber>
+					<communityVatNumber>HU11421427</communityVatNumber>
+					<supplierName>Szakmári Mg. Szolg. Kft.</supplierName>
+					<supplierAddress>
+						<ns2:simpleAddress>
+							<ns2:countryCode>HU</ns2:countryCode>
+							<ns2:postalCode>HU6336</ns2:postalCode>
+							<ns2:city>Szakmár</ns2:city>
+							<ns2:additionalAddressDetail>Major </ns2:additionalAddressDetail>
+						</ns2:simpleAddress>
+					</supplierAddress>
+				</supplierInfo>
+				<customerInfo>
+					<customerVatStatus>OTHER</customerVatStatus>
+					<customerVatData>
+						<thirdStateTaxId>HR38809100484</thirdStateTaxId>
+					</customerVatData>
+					<customerName>OPG NEDJELJKO BOSNJAK</customerName>
+					<customerAddress>
+						<ns2:simpleAddress>
+							<ns2:countryCode>HR</ns2:countryCode>
+							<ns2:postalCode>31542</ns2:postalCode>
+							<ns2:city>Magadenovac,Lacici</ns2:city>
+							<ns2:additionalAddressDetail>V.Nazora 35.</ns2:additionalAddressDetail>
+						</ns2:simpleAddress>
+					</customerAddress>
+				</customerInfo>
+				<invoiceDetail>
+					<invoiceCategory>NORMAL</invoiceCategory>
+					<invoiceDeliveryDate>2023-01-04</invoiceDeliveryDate>
+					<currencyCode>EUR</currencyCode>
+					<exchangeRate>397.14</exchangeRate>
+					<selfBillingIndicator>false</selfBillingIndicator>
+					<paymentDate>2023-01-17</paymentDate>
+					<cashAccountingIndicator>false</cashAccountingIndicator>
+					<invoiceAppearance>PAPER</invoiceAppearance>
+					<additionalInvoiceData>
+						<dataName>C00001_CUSTOMER_OWN</dataName>
+						<dataDescription>Sajat partnerkod</dataDescription>
+						<dataValue>3473</dataValue>
+					</additionalInvoiceData>
+				</invoiceDetail>
+			</invoiceHead>
+			<invoiceLines>
+				<mergedItemIndicator>false</mergedItemIndicator>
+				<line>
+					<lineNumber>1</lineNumber>
+					<productCodes>
+						<productCode>
+							<productCodeCategory>VTSZ</productCodeCategory>
+							<productCodeValue>6820</productCodeValue>
+						</productCode>
+					</productCodes>
+					<lineExpressionIndicator>true</lineExpressionIndicator>
+					<lineDescription>Tárolási díj/Storage fee</lineDescription>
+					<quantity>1</quantity>
+					<unitOfMeasure>MONTH</unitOfMeasure>
+					<unitPrice>328.43</unitPrice>
+					<lineAmountsNormal>
+						<lineNetAmountData>
+							<lineNetAmount>328</lineNetAmount>
+							<lineNetAmountHUF>130433</lineNetAmountHUF>
+						</lineNetAmountData>
+						<lineVatRate>
+							<vatExemption>
+								<case>KBAET</case>
+								<reason>Köz.bel.term. ért., új.közl.eszk.nélk.</reason>
+							</vatExemption>
+						</lineVatRate>
+						<lineVatData>
+							<lineVatAmount>0</lineVatAmount>
+							<lineVatAmountHUF>0</lineVatAmountHUF>
+						</lineVatData>
+						<lineGrossAmountData>
+							<lineGrossAmountNormal>328</lineGrossAmountNormal>
+							<lineGrossAmountNormalHUF>130433</lineGrossAmountNormalHUF>
+						</lineGrossAmountData>
+					</lineAmountsNormal>
+					<additionalLineData>
+						<dataName>C00001_PRODUCT_OWN</dataName>
+						<dataDescription>Sajat termekkod</dataDescription>
+						<dataValue>90000410</dataValue>
+					</additionalLineData>
+					<additionalLineData>
+						<dataName>C00001_PRODUCTVAT_OWN</dataName>
+						<dataDescription>Sajat AFA kod</dataDescription>
+						<dataValue>4</dataValue>
+					</additionalLineData>
+				</line>
+			</invoiceLines>
+			<invoiceSummary>
+				<summaryNormal>
+					<summaryByVatRate>
+						<vatRate>
+							<vatExemption>
+								<case>KBAET</case>
+								<reason>Köz.bel.term. ért., új.közl.eszk.nélk.</reason>
+							</vatExemption>
+						</vatRate>
+						<vatRateNetData>
+							<vatRateNetAmount>328</vatRateNetAmount>
+							<vatRateNetAmountHUF>130433</vatRateNetAmountHUF>
+						</vatRateNetData>
+						<vatRateVatData>
+							<vatRateVatAmount>0</vatRateVatAmount>
+							<vatRateVatAmountHUF>0</vatRateVatAmountHUF>
+						</vatRateVatData>
+						<vatRateGrossData>
+							<vatRateGrossAmount>328</vatRateGrossAmount>
+							<vatRateGrossAmountHUF>130433</vatRateGrossAmountHUF>
+						</vatRateGrossData>
+					</summaryByVatRate>
+					<invoiceNetAmount>328</invoiceNetAmount>
+					<invoiceNetAmountHUF>130433</invoiceNetAmountHUF>
+					<invoiceVatAmount>0</invoiceVatAmount>
+					<invoiceVatAmountHUF>0</invoiceVatAmountHUF>
+				</summaryNormal>
+				<summaryGrossData>
+					<invoiceGrossAmount>328</invoiceGrossAmount>
+					<invoiceGrossAmountHUF>130433</invoiceGrossAmountHUF>
+				</summaryGrossData>
+			</invoiceSummary>
+		</invoice>
+	</invoiceMain>
+</InvoiceData>
