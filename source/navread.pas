@@ -1,0 +1,168 @@
+unit NAVRead;
+
+interface
+
+uses
+	NAV,
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants,
+  System.DateUtils, System.Classes, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, XMLHandler, Data.DB,
+  FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Param,
+  FireDAC.Stan.Error, FireDAC.DatS, FireDAC.Phys.Intf, FireDAC.DApt.Intf,
+  FireDAC.Comp.DataSet, FireDAC.Comp.Client, Vcl.StdCtrls, IdIOHandler,
+  IdIOHandlerSocket, IdIOHandlerStack, IdSSL, IdSSLOpenSSL, crypt,
+  IdBaseComponent, IdComponent, IdTCPConnection, IdTCPClient, IdHTTP,
+  IdExplicitTLSClientServerBase, IdMessageClient, IdSMTPBase, IdSMTP,
+  Vcl.ExtCtrls, Vcl.Menus, AdvMenus, AdvGlassButton;
+
+type
+
+TNAVReadForm = class(TForm)
+	ReadButton: TAdvGlassButton;
+	Label1: TLabel;
+	LastReadLabel: TLabel;
+	Label2: TLabel;
+	NextReadLabel: TLabel;
+	LOGFileButton: TButton;
+	StatusLabel: TLabel;
+	InvoiceLabel: TLabel;
+	TestButton: TButton;
+	procedure FormCreate(Sender: TObject);
+	procedure ReadButtonClick(Sender: TObject);
+	procedure FormClose(Sender: TObject; var Action: TCloseAction);
+	procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+	procedure LOGFileButtonClick(Sender: TObject);
+	procedure TestButtonClick(Sender: TObject);
+	 procedure FormShow(Sender: TObject);
+private
+{ Private declarations }
+	procedure OnMinimize( Sender:TObject );
+public
+{ Public declarations }
+	lReading : boolean;
+	dLastDelete : TDateTime;
+	lClosing : boolean;
+end;
+
+var
+  NAVReadForm: TNAVReadForm;
+
+implementation
+
+{$R *.dfm}
+
+uses reading, ShellAPI, test, main, invoice, navreadsetting;
+
+procedure TNAVReadForm.FormCreate(Sender: TObject);
+var
+	I										: integer;
+	cAlmiraPath							: AnsiString;
+begin
+	NewLine := TInvoiceLine.Create( NIL );
+	MainForm.CegekTable.Active := TRUE;
+	MainForm.CegekTable.EmptyDataSet;
+	for I := 0 to MainForm.NAVReadSettings.NAVReadItems.Count - 1 do begin
+		cAlmiraPath := MainForm.NAVReadSettings.NAVReadItems.Items[ I ].AlmiraPath;
+		if ( not FileExists( cAlmiraPath + '\@\CEGEK.DBF' )) then begin
+			if ( MainForm.NAVReadSettings.Active ) then begin
+				MessageDlg( 'Nem található a cégek állománya : ' + cAlmiraPath + '\@\CEGEK.DBF', mtWarning, [ mbOK ], 0);
+			end;
+			WriteLogFile( 'Nem található a CEGEK.DBF állomány : ' + cAlmiraPath + '\@\CEGEK.DBF',1 );
+			Exit;
+		end else begin
+			WriteLogFile( 'A CEGEK.DBF állomány ellenõrizve.',2 );
+		end;
+// CEGEK.DBF beolvasása
+		MainForm.DBFTable1.DatabaseName := ExtractFilePath( cAlmiraPath + '\@\' );
+		MainForm.DBFTable1.TableName := 'CEGEK.DBF';
+		try
+			MainForm.DBFTable1.OEMTranslate := TRUE;
+			MainForm.DBFTable1.Open;
+		except
+			on E : Exception do begin
+				WriteLogFile( 'Hiba a CEGEK.DBF állomány megnyitásakor :' + E.Message,2 );
+//				MainForm.AppLicationClose;
+				Exit;
+			end;
+		end;
+		MainForm.DBFTable1.First;
+		while ( not MainForm.DBFTable1.Eof ) do begin
+// Ha kell a cégnek valamit olvasni
+			if ( MainForm.DBFTable1.FieldByName( 'NAVREAD' ).AsString > '0' ) then begin
+				MainForm.CegekTable.Append;
+				MainForm.CegekTable.FieldByName( 'kod' ).Value := UpperCase( MainForm.DBFTable1.FieldByName( 'VKOD' ).AsString );
+				MainForm.CegekTable.FieldByName( 'nev' ).Value := UpperCase( MainForm.DBFTable1.FieldByName( 'VNEV' ).AsString );
+				MainForm.CegekTable.FieldByName( 'adoszam' ).Value := MainForm.DBFTable1.FieldByName( 'ASZAM' ).AsString;
+				MainForm.CegekTable.FieldByName( 'login' ).Value := MainForm.DBFTable1.FieldByName( 'ELOGIN' ).AsString;
+				MainForm.CegekTable.FieldByName( 'password' ).Value := MainForm.DBFTable1.FieldByName( 'EPASSWORD' ).AsString;
+				MainForm.CegekTable.FieldByName( 'signkey' ).Value := MainForm.DBFTable1.FieldByName( 'ESIGNKEY' ).AsString;
+				MainForm.CegekTable.FieldByName( 'changekey' ).Value := MainForm.DBFTable1.FieldByName( 'ECHANGEKEY' ).AsString;
+				MainForm.CegekTable.FieldByName( 'logintest' ).Value := MainForm.DBFTable1.FieldByName( 'LOGIN' ).AsString;
+				MainForm.CegekTable.FieldByName( 'passwordtest' ).Value := MainForm.DBFTable1.FieldByName( 'PASSWORD' ).AsString;
+				MainForm.CegekTable.FieldByName( 'signkeytest' ).Value := MainForm.DBFTable1.FieldByName( 'SIGNKEY' ).AsString;
+				MainForm.CegekTable.FieldByName( 'changekeytest' ).Value := MainForm.DBFTable1.FieldByName( 'CHANGEKEY' ).AsString;
+				MainForm.CegekTable.FieldByName( 'navread' ).Value := MainForm.DBFTable1.FieldByName( 'NAVREAD' ).AsString;
+				MainForm.CegekTable.FieldByName( 'navreaditem' ).Value := I;
+				MainForm.CegekTable.Post;
+			end;
+			MainForm.DBFTable1.Next;
+		end;
+		LastReadLabel.Caption := FormatDateTime( 'YYYY-MM-DD hh:mm:ss', MainForm.NAVReadSettings.LastRead );
+		NextReadLabel.Caption := FormatDateTime( 'YYYY-MM-DD hh:mm:ss', IncMinute( MainForm.NAVReadSettings.LastRead, MainForm.NAVReadSettings.ReadInterval ));
+		MainForm.DBFTable1.Close;
+	end;
+	Self.StatusLabel.Caption := 'Várakozás...';
+	lReading := FALSE;
+	MainForm.MyShowBalloonHint('NAVRead', 'NAV adatbázis szinkronizálás aktív...', bfInfo );
+end;
+
+procedure TNAVReadForm.FormClose(Sender: TObject; var Action: TCloseAction);
+begin
+	Action := caNone;
+	Visible := FALSE;
+end;
+
+procedure TNAVReadForm.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+begin
+	CanClose := FALSE;
+	Self.Hide;
+	MainForm.Menu01.Enabled := TRUE;
+	MainForm.Menu02.Enabled := TRUE;
+	MainForm.Menu03.Enabled := TRUE;
+	MainForm.Menu04.Enabled := TRUE;
+	MainForm.Menu05.Enabled := TRUE;
+end;
+
+
+procedure TNAVReadForm.FormShow(Sender: TObject);
+begin
+	MainForm.Menu01.Enabled := FALSE;
+	MainForm.Menu02.Enabled := FALSE;
+	MainForm.Menu03.Enabled := FALSE;
+	MainForm.Menu04.Enabled := FALSE;
+	MainForm.Menu05.Enabled := FALSE;
+end;
+
+procedure TNAVReadForm.LOGFileButtonClick(Sender: TObject);
+begin
+	ShellExecute( Handle, 'open', PChar( MainForm.cLogFile ), NIL, NIL, SW_SHOWNORMAL );
+end;
+
+procedure TNAVReadForm.ReadButtonClick(Sender: TObject);
+begin
+	lReading := TRUE;
+	ReadFactories( TRUE );
+	lReading := FALSE;
+end;
+
+procedure TNAVReadForm.TestButtonClick(Sender: TObject);
+begin
+	TestForm.ShowModal;
+end;
+
+procedure TNAVReadForm.OnMinimize( Sender:TObject );
+begin
+	NAVReadForm.Hide;
+end;
+
+end.
