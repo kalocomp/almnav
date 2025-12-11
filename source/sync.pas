@@ -525,6 +525,7 @@ begin
 				end;
 			end else begin
 // Ha MySQL szerver van
+// Ha MySQL szerver van használatban
 //				cSQL := 'SELECT * FROM partner WHERE partner.kod = ' + MainForm.DBFTable1.FieldByName( 'T20KOD' ).AsString;
 //				MyMySQLSelect( cSQL );
 //				if ( MainForm.SyncMySQLQuery.RecordCount <> 0 ) then begin
